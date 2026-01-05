@@ -191,6 +191,13 @@ const products = [
     { name: 'Soupe', category: 'Conserves', aliases: ['soupes', 'soup'] },
 
     // Vaiselle Jetable
+    // Fourchettes, cuillères, couteaux, etc.
+    { name: 'Fourchettes', category: 'Vaiselle Jetable', aliases: ['fourchette', 'forchette', 'forchet'] },
+    { name: 'Cuillères', category: 'Vaiselle Jetable', aliases: ['cuillère', 'cuillere', 'cuileres'] },
+    { name: 'Couteaux', category: 'Vaiselle Jetable', aliases: ['couteau', 'couteaux'] },
+    { name: 'Pinces', category: 'Vaiselle Jetable', aliases: ['pince', 'pincees'] },
+    { name: 'Serviettes', category: 'Vaiselle Jetable', aliases: ['serviette', 'serviettes', 'servietes', 'serviete'] },
+    { name: 'Couverts', category: 'Vaiselle Jetable', aliases: ['couvert', 'couverts'] },
     { name: 'Assiettes jetables', category: 'Vaiselle Jetable', aliases: ['assiette jetable', 'disposable plates'] },
     { name: 'Gobelets', category: 'Vaiselle Jetable', aliases: ['gobelet', 'cups', 'plastic cups'] },
     { name: 'Serviettes en papier', category: 'Vaiselle Jetable', aliases: ['serviette papier', 'paper napkins', 'napkins'] },

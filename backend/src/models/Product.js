@@ -56,17 +56,42 @@ class Product {
         return result.rows[0] ? new Product(result.rows[0]) : null;
     }
 
+    // Generate plural/singular variants of a term
+    static getPluralVariants(term) {
+        const variants = [term];
+        
+        // If ends with 's', try without it (plural -> singular)
+        if (term.endsWith('s') && term.length > 2) {
+            variants.push(term.slice(0, -1));
+            // Handle 'es' ending (e.g., "tomatoes" -> "tomato")
+            if (term.endsWith('es') && term.length > 3) {
+                variants.push(term.slice(0, -2));
+            }
+        } else {
+            // Try adding 's' (singular -> plural)
+            variants.push(term + 's');
+        }
+        
+        return [...new Set(variants)]; // Remove duplicates
+    }
+
     // Find by name or alias (main lookup method)
     static async lookup(term) {
         const normalized = term.toLowerCase().trim();
+        const variants = Product.getPluralVariants(normalized);
         
-        // Try exact name match first
-        let product = await Product.findByName(normalized);
-        if (product) return product;
+        // Try each variant
+        for (const variant of variants) {
+            // Try exact name match first
+            let product = await Product.findByName(variant);
+            if (product) return product;
 
-        // Try alias match
-        product = await Product.findByAlias(normalized);
-        return product;
+            // Try alias match
+            product = await Product.findByAlias(variant);
+            if (product) return product;
+        }
+        
+        return null;
     }
 
     // Find products by category
@@ -145,16 +170,26 @@ class Product {
         return result.rowCount > 0;
     }
 
-    // Search products by partial name
+    // Search products by partial name or alias (includes plural/singular variants)
     static async search(query, limit = 20) {
+        const normalized = query.toLowerCase().trim();
+        const variants = Product.getPluralVariants(normalized);
+        
+        // Build OR conditions for all variants (search both name and aliases)
+        const nameConditions = variants.map((_, i) => `LOWER(p.name) LIKE LOWER($${i + 1})`).join(' OR ');
+        const aliasConditions = variants.map((_, i) => `LOWER(pa.alias) LIKE LOWER($${i + 1})`).join(' OR ');
+        const params = variants.map(v => `%${v}%`);
+        params.push(limit);
+        
         const result = await db.query(`
-            SELECT p.*, c.name as category_name, c.icon as category_icon
+            SELECT DISTINCT p.*, c.name as category_name, c.icon as category_icon
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
-            WHERE LOWER(p.name) LIKE LOWER($1)
+            LEFT JOIN product_aliases pa ON p.id = pa.product_id
+            WHERE (${nameConditions}) OR (${aliasConditions})
             ORDER BY p.name ASC
-            LIMIT $2
-        `, [`%${query}%`, limit]);
+            LIMIT $${params.length}
+        `, params);
         return result.rows.map(row => new Product(row));
     }
 }
