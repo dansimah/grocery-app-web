@@ -33,17 +33,17 @@ class GroceryItem {
         `;
     }
 
-    // Save item (create or update)
+    // Save item (create or update) - SHARED LIST: no user_id check on update
     async save() {
         if (this.id) {
             const result = await db.query(`
                 UPDATE grocery_items 
                 SET product_id = $1, quantity = $2, status = $3, 
                     batch_id = $4, note = $5, updated_at = NOW() 
-                WHERE id = $6 AND user_id = $7
+                WHERE id = $6
                 RETURNING *
             `, [this.product_id, this.quantity, this.status, 
-                this.batch_id, this.note, this.id, this.user_id]);
+                this.batch_id, this.note, this.id]);
             return result.rows[0] ? new GroceryItem(result.rows[0]) : null;
         } else {
             const result = await db.query(`
@@ -56,62 +56,61 @@ class GroceryItem {
         }
     }
 
-    // Find all items for a user (with product/category info)
+    // Find all items - SHARED LIST: returns all items regardless of user
     static async findAllByUser(userId) {
         const result = await db.query(`
             ${GroceryItem.baseQuery}
-            WHERE gi.user_id = $1 
             ORDER BY c.sort_order ASC, p.name ASC
-        `, [userId]);
+        `);
         return result.rows.map(row => new GroceryItem(row));
     }
 
-    // Find items by status for a user
+    // Find items by status - SHARED LIST: returns all items with status
     static async findByStatus(userId, status) {
         const result = await db.query(`
             ${GroceryItem.baseQuery}
-            WHERE gi.user_id = $1 AND gi.status = $2 
+            WHERE gi.status = $1 
             ORDER BY c.sort_order ASC, p.name ASC
-        `, [userId, status]);
+        `, [status]);
         return result.rows.map(row => new GroceryItem(row));
     }
 
-    // Find item by ID (with user check)
+    // Find item by ID - SHARED LIST: no user check
     static async findById(id, userId) {
         const result = await db.query(`
             ${GroceryItem.baseQuery}
-            WHERE gi.id = $1 AND gi.user_id = $2
-        `, [id, userId]);
+            WHERE gi.id = $1
+        `, [id]);
         return result.rows[0] ? new GroceryItem(result.rows[0]) : null;
     }
 
-    // Find by product for a user (to check if already in list)
+    // Find by product - SHARED LIST: check by product_id only
     static async findByProduct(userId, productId) {
         const result = await db.query(`
             ${GroceryItem.baseQuery}
-            WHERE gi.user_id = $1 AND gi.product_id = $2 AND gi.status != 'found'
-        `, [userId, productId]);
+            WHERE gi.product_id = $1 AND gi.status != 'found'
+        `, [productId]);
         return result.rows[0] ? new GroceryItem(result.rows[0]) : null;
     }
 
-    // Find by batch ID
+    // Find by batch ID - SHARED LIST
     static async findByBatchId(userId, batchId) {
         const result = await db.query(`
             ${GroceryItem.baseQuery}
-            WHERE gi.user_id = $1 AND gi.batch_id = $2 
+            WHERE gi.batch_id = $1 
             ORDER BY gi.created_at ASC
-        `, [userId, batchId]);
+        `, [batchId]);
         return result.rows.map(row => new GroceryItem(row));
     }
 
-    // Update status
+    // Update status - SHARED LIST: no user check
     static async updateStatus(id, userId, status) {
         const result = await db.query(`
             UPDATE grocery_items 
             SET status = $1, updated_at = NOW() 
-            WHERE id = $2 AND user_id = $3 
+            WHERE id = $2 
             RETURNING *
-        `, [status, id, userId]);
+        `, [status, id]);
         
         if (result.rows[0]) {
             return GroceryItem.findById(id, userId);
@@ -119,38 +118,37 @@ class GroceryItem {
         return null;
     }
 
-    // Delete item
+    // Delete item - SHARED LIST: no user check
     async delete() {
         const result = await db.query(
-            'DELETE FROM grocery_items WHERE id = $1 AND user_id = $2',
-            [this.id, this.user_id]
+            'DELETE FROM grocery_items WHERE id = $1',
+            [this.id]
         );
         return result.rowCount > 0;
     }
 
-    // Delete by status
+    // Delete by status - SHARED LIST: deletes all with status
     static async deleteByStatus(userId, status) {
         const result = await db.query(
-            'DELETE FROM grocery_items WHERE user_id = $1 AND status = $2',
-            [userId, status]
+            'DELETE FROM grocery_items WHERE status = $1',
+            [status]
         );
         return result.rowCount;
     }
 
-    // Delete batch
+    // Delete batch - SHARED LIST
     static async deleteBatch(userId, batchId) {
         const result = await db.query(
-            'DELETE FROM grocery_items WHERE user_id = $1 AND batch_id = $2',
-            [userId, batchId]
+            'DELETE FROM grocery_items WHERE batch_id = $1',
+            [batchId]
         );
         return result.rowCount;
     }
 
-    // Clear all items for a user
+    // Clear all items - SHARED LIST: clears everything
     static async clearAll(userId) {
         const result = await db.query(
-            'DELETE FROM grocery_items WHERE user_id = $1',
-            [userId]
+            'DELETE FROM grocery_items'
         );
         return result.rowCount;
     }

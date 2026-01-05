@@ -177,10 +177,10 @@ class GroceryService {
                         sessionId
                     ]);
                     
-                    // Delete from active list
+                    // Delete from active list - SHARED LIST: no user check
                     await client.query(
-                        'DELETE FROM grocery_items WHERE id = $1 AND user_id = $2',
-                        [item.id, item.user_id]
+                        'DELETE FROM grocery_items WHERE id = $1',
+                        [item.id]
                     );
                     archivedCount++;
                 }

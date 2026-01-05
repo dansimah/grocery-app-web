@@ -32,39 +32,38 @@ class GroceryHistory {
         return new GroceryHistory(result.rows[0]);
     }
 
-    // Find all history for a user
+    // Find all history - SHARED LIST: returns all history
     static async findAllByUser(userId, limit = 100) {
         const result = await db.query(`
             SELECT * FROM grocery_history 
-            WHERE user_id = $1 
             ORDER BY completed_at DESC 
-            LIMIT $2
-        `, [userId, limit]);
+            LIMIT $1
+        `, [limit]);
         return result.rows.map(row => new GroceryHistory(row));
     }
 
-    // Find by session ID
+    // Find by session ID - SHARED LIST
     static async findBySession(userId, sessionId) {
         const result = await db.query(`
             SELECT * FROM grocery_history 
-            WHERE user_id = $1 AND shopping_session_id = $2 
+            WHERE shopping_session_id = $1 
             ORDER BY completed_at ASC
-        `, [userId, sessionId]);
+        `, [sessionId]);
         return result.rows.map(row => new GroceryHistory(row));
     }
 
-    // Find by status
+    // Find by status - SHARED LIST
     static async findByStatus(userId, status, limit = 50) {
         const result = await db.query(`
             SELECT * FROM grocery_history 
-            WHERE user_id = $1 AND status = $2 
+            WHERE status = $1 
             ORDER BY completed_at DESC 
-            LIMIT $3
-        `, [userId, status, limit]);
+            LIMIT $2
+        `, [status, limit]);
         return result.rows.map(row => new GroceryHistory(row));
     }
 
-    // Get unique shopping sessions
+    // Get unique shopping sessions - SHARED LIST
     static async getSessions(userId, limit = 20) {
         const result = await db.query(`
             SELECT shopping_session_id, 
@@ -74,37 +73,36 @@ class GroceryHistory {
                    COUNT(*) FILTER (WHERE status = 'found') as found_count,
                    COUNT(*) FILTER (WHERE status = 'not_found') as not_found_count
             FROM grocery_history 
-            WHERE user_id = $1 AND shopping_session_id IS NOT NULL
+            WHERE shopping_session_id IS NOT NULL
             GROUP BY shopping_session_id 
             ORDER BY MAX(completed_at) DESC 
-            LIMIT $2
-        `, [userId, limit]);
+            LIMIT $1
+        `, [limit]);
         return result.rows;
     }
 
-    // Find by ID
+    // Find by ID - SHARED LIST
     static async findById(id, userId) {
         const result = await db.query(
-            'SELECT * FROM grocery_history WHERE id = $1 AND user_id = $2',
-            [id, userId]
+            'SELECT * FROM grocery_history WHERE id = $1',
+            [id]
         );
         return result.rows[0] ? new GroceryHistory(result.rows[0]) : null;
     }
 
-    // Delete history entry
+    // Delete history entry - SHARED LIST
     async delete() {
         const result = await db.query(
-            'DELETE FROM grocery_history WHERE id = $1 AND user_id = $2',
-            [this.id, this.user_id]
+            'DELETE FROM grocery_history WHERE id = $1',
+            [this.id]
         );
         return result.rowCount > 0;
     }
 
-    // Clear all history for a user
+    // Clear all history - SHARED LIST
     static async clearAll(userId) {
         const result = await db.query(
-            'DELETE FROM grocery_history WHERE user_id = $1',
-            [userId]
+            'DELETE FROM grocery_history'
         );
         return result.rowCount;
     }
