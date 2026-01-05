@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, Search, Edit2, Trash2, Tag, X, ChevronDown, ChevronRight, Plus, GripVertical } from 'lucide-react';
+import { Package, Search, Edit2, Trash2, Tag, ChevronDown, ChevronRight, Plus, GripVertical } from 'lucide-react';
 import { api, Product, Category } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import EditProductDialog from '@/components/EditProductDialog';
 
 type Tab = 'products' | 'categories';
 
@@ -19,9 +20,8 @@ export default function Products() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [editProduct, setEditProduct] = useState<(Product & { aliases?: string[] }) | null>(null);
+  const [editProductId, setEditProductId] = useState<number | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [newAlias, setNewAlias] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   
   // Category editing state
@@ -76,56 +76,9 @@ export default function Products() {
   };
 
   // Product handlers
-  const openEditProduct = async (product: Product) => {
-    try {
-      const fullProduct = await api.getProduct(product.id);
-      setEditProduct(fullProduct);
-      setIsEditOpen(true);
-    } catch (error) {
-      toast({ title: 'Failed to load product', variant: 'destructive' });
-    }
-  };
-
-  const handleUpdateProduct = async () => {
-    if (!editProduct) return;
-    try {
-      await api.updateProduct(editProduct.id, {
-        name: editProduct.name,
-        category_id: editProduct.category_id,
-      });
-      toast({ title: 'Product updated' });
-      setIsEditOpen(false);
-      loadData();
-    } catch (error) {
-      toast({
-        title: 'Failed to update',
-        description: error instanceof Error ? error.message : 'Something went wrong',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleAddAlias = async () => {
-    if (!editProduct || !newAlias.trim()) return;
-    try {
-      const result = await api.addProductAlias(editProduct.id, newAlias.trim());
-      setEditProduct({ ...editProduct, aliases: result.aliases });
-      setNewAlias('');
-      toast({ title: 'Alias added' });
-    } catch (error) {
-      toast({ title: 'Failed to add alias', variant: 'destructive' });
-    }
-  };
-
-  const handleRemoveAlias = async (alias: string) => {
-    if (!editProduct) return;
-    try {
-      const result = await api.removeProductAlias(editProduct.id, alias);
-      setEditProduct({ ...editProduct, aliases: result.aliases });
-      toast({ title: 'Alias removed' });
-    } catch (error) {
-      toast({ title: 'Failed to remove alias', variant: 'destructive' });
-    }
+  const openEditProduct = (product: Product) => {
+    setEditProductId(product.id);
+    setIsEditOpen(true);
   };
 
   const handleDeleteProduct = async (id: number) => {
@@ -447,83 +400,12 @@ export default function Products() {
       )}
 
       {/* Edit Product Dialog */}
-      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit Product</DialogTitle>
-          </DialogHeader>
-          {editProduct && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  value={editProduct.name}
-                  onChange={(e) => setEditProduct({ ...editProduct, name: e.target.value })}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
-                <Select
-                  value={editProduct.category_id.toString()}
-                  onValueChange={(value) => setEditProduct({ ...editProduct, category_id: parseInt(value) })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id.toString()}>
-                        {cat.icon} {cat.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Aliases (spelling variants)</Label>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {editProduct.aliases?.map((alias) => (
-                    <span
-                      key={alias}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-muted rounded-full text-sm"
-                    >
-                      {alias}
-                      <button
-                        onClick={() => handleRemoveAlias(alias)}
-                        className="hover:text-red-500 active:scale-95"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Add alias..."
-                    value={newAlias}
-                    onChange={(e) => setNewAlias(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddAlias()}
-                  />
-                  <Button onClick={handleAddAlias} size="icon" className="shrink-0">
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleUpdateProduct}>
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EditProductDialog
+        productId={editProductId}
+        open={isEditOpen}
+        onOpenChange={setIsEditOpen}
+        onSaved={loadData}
+      />
 
       {/* Add Category Dialog */}
       <Dialog open={isAddCategoryOpen} onOpenChange={setIsAddCategoryOpen}>
