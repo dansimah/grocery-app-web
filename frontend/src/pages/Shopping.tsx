@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence, PanInfo, useMotionValue, useTransform } from 'framer-motion';
-import { ShoppingCart, Check, Ban, ArrowLeft, ArrowRight, CheckCircle2, XCircle, RotateCcw, Undo2, Package } from 'lucide-react';
+import { ShoppingCart, Check, Ban, ArrowLeft, ArrowRight, CheckCircle2, XCircle, RotateCcw, Undo2, Package, ChevronDown } from 'lucide-react';
 import { useGrocery } from '@/contexts/GroceryContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,6 +13,18 @@ interface UndoAction {
   itemId: number;
   previousStatus: ItemStatus;
   productName: string;
+}
+
+// Helper to group items by category
+function groupByCategory(items: GroceryItem[]): Record<string, { icon: string; items: GroceryItem[] }> {
+  return items.reduce((acc, item) => {
+    const cat = item.category_name;
+    if (!acc[cat]) {
+      acc[cat] = { icon: item.category_icon, items: [] };
+    }
+    acc[cat].items.push(item);
+    return acc;
+  }, {} as Record<string, { icon: string; items: GroceryItem[] }>);
 }
 
 export default function Shopping() {
@@ -31,15 +43,10 @@ export default function Shopping() {
   );
   const notFoundItems = activeItems.filter(item => item.status === 'not_found');
 
-  // Group found items by category
-  const foundByCategory = foundItems.reduce((acc, item) => {
-    const cat = item.category_name;
-    if (!acc[cat]) {
-      acc[cat] = { icon: item.category_icon, items: [] };
-    }
-    acc[cat].items.push(item);
-    return acc;
-  }, {} as Record<string, { icon: string; items: GroceryItem[] }>);
+  // Group all lists by category
+  const shoppingByCategory = groupByCategory(shoppingItems);
+  const notFoundByCategory = groupByCategory(notFoundItems);
+  const foundByCategory = groupByCategory(foundItems);
 
   const totalItems = shoppingItems.length;
   const foundCount = foundItems.length;
@@ -63,6 +70,7 @@ export default function Shopping() {
     
     try {
       await updateStatus(lastAction.itemId, lastAction.previousStatus);
+      await fetchItems(); // Refresh to get updated state
       toast({
         title: 'Undone',
         description: `Restored ${lastAction.productName}`,
@@ -74,11 +82,12 @@ export default function Shopping() {
         variant: 'destructive',
       });
     }
-  }, [undoStack, updateStatus, toast]);
+  }, [undoStack, updateStatus, fetchItems, toast]);
 
   const handleRestore = useCallback(async (item: GroceryItem) => {
     try {
       await updateStatus(item.id, 'pending');
+      await fetchItems(); // Refresh to update the list immediately
       toast({
         title: 'Restored',
         description: `${item.product_name} moved back to list`,
@@ -90,7 +99,7 @@ export default function Shopping() {
         variant: 'destructive',
       });
     }
-  }, [updateStatus, toast]);
+  }, [updateStatus, fetchItems, toast]);
 
   const handleComplete = async () => {
     setIsCompleting(true);
@@ -188,22 +197,36 @@ export default function Shopping() {
         </div>
       </div>
 
-      {/* Shopping Items */}
-      <div className="space-y-3">
-        <AnimatePresence mode="popLayout">
-          {shoppingItems.map((item, index) => (
-            <SwipeableItem
-              key={item.id}
-              item={item}
-              onSwipeLeft={() => handleStatusChange(item, 'not_found')}
-              onSwipeRight={() => handleStatusChange(item, 'found')}
-              index={index}
-            />
-          ))}
-        </AnimatePresence>
+      {/* Shopping Items - Grouped by Category */}
+      <div className="space-y-4">
+        {Object.entries(shoppingByCategory).map(([category, { icon, items }]) => (
+          <div key={category} className="space-y-2">
+            {/* Category Header */}
+            <div className="flex items-center gap-2 px-1">
+              <span className="text-lg">{icon || '📦'}</span>
+              <span className="font-medium text-foreground">{category}</span>
+              <span className="text-sm text-muted-foreground">({items.length})</span>
+            </div>
+            
+            {/* Items */}
+            <div className="space-y-2">
+              <AnimatePresence mode="popLayout">
+                {items.map((item, index) => (
+                  <SwipeableItem
+                    key={item.id}
+                    item={item}
+                    onSwipeLeft={() => handleStatusChange(item, 'not_found')}
+                    onSwipeRight={() => handleStatusChange(item, 'found')}
+                    index={index}
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Not Found Section */}
+      {/* Not Found Section - Grouped by Category */}
       {notFoundItems.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -217,27 +240,45 @@ export default function Shopping() {
                   Not Found ({notFoundItems.length})
                 </h3>
               </div>
-              <div className="space-y-2">
-                {notFoundItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between p-2 rounded-lg bg-red-100/50"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">{item.category_icon || '📦'}</span>
-                      <span className="text-red-700">
-                        {item.product_name} {item.quantity > 1 && `(x${item.quantity})`}
-                      </span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRestore(item)}
-                      className="text-red-600 hover:text-red-800 hover:bg-red-100"
-                    >
-                      <RotateCcw className="w-4 h-4" />
-                    </Button>
-                  </div>
+              <div className="space-y-3">
+                {Object.entries(notFoundByCategory).map(([category, { icon, items }]) => (
+                  <Collapsible key={category} defaultOpen={true}>
+                    <CollapsibleTrigger className="w-full">
+                      <div className="flex items-center justify-between p-2 rounded-lg bg-red-100/50 hover:bg-red-100 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{icon || '📦'}</span>
+                          <span className="font-medium text-red-800">{category}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-red-600">{items.length}</span>
+                          <ChevronDown className="w-4 h-4 text-red-600" />
+                        </div>
+                      </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="mt-2 space-y-1 pl-8">
+                        {items.map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between p-2 rounded-lg hover:bg-red-100/50"
+                          >
+                            <span className="text-red-700">
+                              {item.product_name} (x{item.quantity})
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRestore(item)}
+                              className="text-red-600 hover:text-red-800 hover:bg-red-100"
+                              title="Restore to list"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 ))}
               </div>
             </CardContent>
@@ -245,7 +286,7 @@ export default function Shopping() {
         </motion.div>
       )}
 
-      {/* Found Items Section (grouped by category) */}
+      {/* Found Items Section - Grouped by Category */}
       {foundItems.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -268,7 +309,10 @@ export default function Shopping() {
                           <span className="text-lg">{icon || '📦'}</span>
                           <span className="font-medium text-emerald-800">{category}</span>
                         </div>
-                        <span className="text-sm text-emerald-600">{items.length} items</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-emerald-600">{items.length}</span>
+                          <ChevronDown className="w-4 h-4 text-emerald-600" />
+                        </div>
                       </div>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
@@ -279,7 +323,7 @@ export default function Shopping() {
                             className="flex items-center justify-between p-2 rounded-lg hover:bg-emerald-100/50"
                           >
                             <span className="text-emerald-700 line-through">
-                              {item.product_name} {item.quantity > 1 && `(x${item.quantity})`}
+                              {item.product_name} (x{item.quantity})
                             </span>
                             <Button
                               variant="ghost"
@@ -365,7 +409,7 @@ function SwipeableItem({ item, onSwipeLeft, onSwipeRight, index }: SwipeableItem
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: 200 }}
-      transition={{ delay: index * 0.05 }}
+      transition={{ delay: index * 0.02 }}
       className="relative"
     >
       {/* Background indicators */}
@@ -387,27 +431,11 @@ function SwipeableItem({ item, onSwipeLeft, onSwipeRight, index }: SwipeableItem
         dragElastic={0.7}
         onDragEnd={handleDragEnd}
         style={{ x, background }}
-        className={cn(
-          'relative p-4 rounded-xl border shadow-sm cursor-grab active:cursor-grabbing',
-          item.status === 'selected' ? 'border-primary/30' : 'border-gray-200'
-        )}
+        className="relative p-3 rounded-xl border border-gray-200 shadow-sm cursor-grab active:cursor-grabbing"
       >
-        <div className="flex items-center gap-4">
-          <div
-            className={cn(
-              'w-12 h-12 rounded-xl flex items-center justify-center text-2xl',
-              item.status === 'selected' ? 'bg-primary/10' : 'bg-muted'
-            )}
-          >
-            {item.category_icon || <Package className="w-6 h-6 text-muted-foreground" />}
-          </div>
-          <div className="flex-1">
-            <h3 className="font-medium text-foreground">{item.product_name}</h3>
-            <p className="text-sm text-muted-foreground">
-              {item.category_name}
-              {item.quantity > 1 && ` • x${item.quantity}`}
-            </p>
-          </div>
+        <div className="flex items-center gap-3">
+          <h3 className="flex-1 font-medium text-foreground">{item.product_name}</h3>
+          <span className="text-sm text-muted-foreground tabular-nums">x{item.quantity}</span>
         </div>
       </motion.div>
     </motion.div>

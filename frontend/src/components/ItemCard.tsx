@@ -103,7 +103,6 @@ export default function ItemCard({ item }: ItemCardProps) {
         <span className="font-medium text-foreground truncate block">
           {item.product_name}
         </span>
-        <span className="text-xs text-muted-foreground">{item.category_name}</span>
       </div>
 
       {/* Quantity controls */}

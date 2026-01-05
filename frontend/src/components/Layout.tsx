@@ -40,9 +40,9 @@ export default function Layout() {
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t z-40 safe-bottom">
-        <div className="max-w-4xl mx-auto px-4">
-          <div className="flex items-center justify-around h-16 pb-[env(safe-area-inset-bottom)]">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t z-40">
+        <div className="max-w-4xl mx-auto px-4 pb-[env(safe-area-inset-bottom)]">
+          <div className="flex items-center justify-around h-16">
             {navItems.map(({ path, icon: Icon, label }) => (
               <NavLink
                 key={path}
