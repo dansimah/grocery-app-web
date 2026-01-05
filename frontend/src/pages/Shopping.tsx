@@ -1,12 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence, PanInfo, useMotionValue, useTransform } from 'framer-motion';
-import { ShoppingCart, Check, Ban, ArrowLeft, ArrowRight, CheckCircle2, XCircle, RotateCcw, Undo2, Package, ChevronDown } from 'lucide-react';
+import { ShoppingCart, Check, Ban, ArrowLeft, ArrowRight, CheckCircle2, XCircle, RotateCcw, Undo2, ChevronDown } from 'lucide-react';
 import { useGrocery } from '@/contexts/GroceryContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
 import type { GroceryItem, ItemStatus } from '@/lib/api';
 
 interface UndoAction {
