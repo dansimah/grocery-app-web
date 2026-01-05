@@ -31,7 +31,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-this-to-a-secure-secret-in-production}
       JWT_EXPIRES_IN: 7d
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
-      FRONTEND_URL: http://localhost
+      FRONTEND_URL: https://grocery.simah-ha.xyz
       PORT: 3001
     depends_on:
       postgres:

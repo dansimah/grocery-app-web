@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Edit2, Trash2, ArrowRight, Ban } from 'lucide-react';
+import { Check, Edit2, Trash2, ArrowRight, Ban, Plus, Minus } from 'lucide-react';
 import { useGrocery } from '@/contexts/GroceryContext';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -29,6 +29,25 @@ export default function ItemCard({ item, showActions = true }: ItemCardProps) {
   const [editQuantity, setEditQuantity] = useState(item.quantity.toString());
   const [editNote, setEditNote] = useState(item.note || '');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isQuantityUpdating, setIsQuantityUpdating] = useState(false);
+
+  const handleQuantityChange = async (delta: number) => {
+    const newQuantity = item.quantity + delta;
+    if (newQuantity < 1) return;
+    
+    setIsQuantityUpdating(true);
+    try {
+      await updateItem(item.id, { quantity: newQuantity });
+    } catch (error) {
+      toast({
+        title: 'Failed to update',
+        description: error instanceof Error ? error.message : 'Something went wrong',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsQuantityUpdating(false);
+    }
+  };
 
   const style = statusStyles[item.status];
 
@@ -109,15 +128,37 @@ export default function ItemCard({ item, showActions = true }: ItemCardProps) {
             <span className={cn('font-medium truncate', style.text)}>
               {item.product_name}
             </span>
-            {item.quantity > 1 && (
-              <span className="text-xs px-2 py-0.5 bg-muted rounded-full text-muted-foreground">
-                x{item.quantity}
-              </span>
-            )}
           </div>
           {item.note && (
             <p className="text-xs text-muted-foreground truncate">{item.note}</p>
           )}
+        </div>
+
+        {/* Quantity controls */}
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => handleQuantityChange(-1)}
+            disabled={item.quantity <= 1 || isQuantityUpdating}
+            aria-label="Decrease quantity"
+          >
+            <Minus className="w-3 h-3" />
+          </Button>
+          <span className="w-6 text-center text-sm font-medium tabular-nums">
+            {item.quantity}
+          </span>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => handleQuantityChange(1)}
+            disabled={isQuantityUpdating}
+            aria-label="Increase quantity"
+          >
+            <Plus className="w-3 h-3" />
+          </Button>
         </div>
 
         {/* Actions - visible on mobile, enhanced on hover for desktop */}

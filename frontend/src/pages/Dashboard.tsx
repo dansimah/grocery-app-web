@@ -1,21 +1,138 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Sparkles, Check, Trash2, Package } from 'lucide-react';
+import { Plus, Sparkles, Check, Trash2, Package, Search } from 'lucide-react';
 import { useGrocery } from '@/contexts/GroceryContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { api, Product } from '@/lib/api';
 import CategorySection from '@/components/CategorySection';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
 export default function Dashboard() {
-  const { grouped, categoryInfo, foundItems, isLoading, fetchItems, parseAndAdd, clearFound } = useGrocery();
+  const { grouped, categoryInfo, foundItems, isLoading, fetchItems, parseAndAdd, addItem, clearFound } = useGrocery();
   const { toast } = useToast();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [inputText, setInputText] = useState('');
   const [isParsing, setIsParsing] = useState(false);
+  
+  // Quick add with autocomplete
+  const [quickAddText, setQuickAddText] = useState('');
+  const [suggestions, setSuggestions] = useState<Product[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [isSearching, setIsSearching] = useState(false);
+  const quickAddRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounced search for products
+  const searchProducts = useCallback(async (query: string) => {
+    if (query.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    
+    setIsSearching(true);
+    try {
+      const products = await api.getProducts(undefined, query);
+      setSuggestions(products.slice(0, 8));
+      setShowSuggestions(products.length > 0);
+      setSelectedIndex(-1);
+    } catch (error) {
+      console.error('Search error:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
+  const handleQuickAddChange = (value: string) => {
+    setQuickAddText(value);
+    
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+    
+    debounceRef.current = setTimeout(() => {
+      searchProducts(value);
+    }, 200);
+  };
+
+  const handleSelectProduct = async (product: Product) => {
+    try {
+      await addItem(product.id, 1);
+      toast({ title: `Added ${product.name}` });
+      setQuickAddText('');
+      setSuggestions([]);
+      setShowSuggestions(false);
+      inputRef.current?.focus();
+    } catch (error) {
+      toast({
+        title: 'Failed to add item',
+        description: error instanceof Error ? error.message : 'Something went wrong',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleQuickAddSubmit = async () => {
+    if (!quickAddText.trim()) return;
+    
+    setIsSearching(true);
+    try {
+      const stats = await parseAndAdd(quickAddText);
+      toast({
+        title: 'Item added!',
+        description: stats.fromAI > 0 ? 'Parsed by AI' : 'Added from database',
+      });
+      setQuickAddText('');
+      setSuggestions([]);
+      setShowSuggestions(false);
+    } catch (error) {
+      toast({
+        title: 'Failed to add item',
+        description: error instanceof Error ? error.message : 'Something went wrong',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleQuickAddKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown' && showSuggestions) {
+      e.preventDefault();
+      setSelectedIndex(prev => Math.min(prev + 1, suggestions.length - 1));
+    } else if (e.key === 'ArrowUp' && showSuggestions) {
+      e.preventDefault();
+      setSelectedIndex(prev => Math.max(prev - 1, -1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (selectedIndex >= 0 && suggestions[selectedIndex]) {
+        handleSelectProduct(suggestions[selectedIndex]);
+      } else {
+        // No selection - send to AI parser
+        handleQuickAddSubmit();
+      }
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+    }
+  };
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (quickAddRef.current && !quickAddRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     fetchItems();
@@ -83,9 +200,81 @@ export default function Dashboard() {
           </p>
         </div>
         <Button onClick={() => setIsAddDialogOpen(true)} size="lg" className="gap-2">
-          <Plus className="w-5 h-5" />
-          Add Items
+          <Sparkles className="w-5 h-5" />
+          AI Add
         </Button>
+      </motion.div>
+
+      {/* Quick Add with Autocomplete */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        ref={quickAddRef}
+        className="relative"
+      >
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            ref={inputRef}
+            type="text"
+            placeholder="Quick add item..."
+            value={quickAddText}
+            onChange={(e) => handleQuickAddChange(e.target.value)}
+            onKeyDown={handleQuickAddKeyDown}
+            onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+            className="pl-9 pr-4"
+          />
+          {isSearching && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent" />
+            </div>
+          )}
+        </div>
+        
+        {/* Suggestions dropdown */}
+        <AnimatePresence>
+          {showSuggestions && suggestions.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg overflow-hidden"
+            >
+              {suggestions.map((product, index) => (
+                <button
+                  key={product.id}
+                  onClick={() => handleSelectProduct(product)}
+                  className={`w-full px-3 py-2 text-left flex items-center justify-between hover:bg-muted transition-colors ${
+                    index === selectedIndex ? 'bg-muted' : ''
+                  }`}
+                >
+                  <span className="font-medium">{product.name}</span>
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <span>{product.category_icon}</span>
+                    {product.category_name}
+                  </span>
+                </button>
+              ))}
+            </motion.div>
+          )}
+          {quickAddText.length >= 2 && !isSearching && suggestions.length === 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg overflow-hidden"
+            >
+              <button
+                onClick={handleQuickAddSubmit}
+                className="w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-muted transition-colors"
+              >
+                <Sparkles className="w-4 h-4 text-primary" />
+                <span>Add "<strong>{quickAddText}</strong>" with AI</span>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
 
       {/* Empty State */}
@@ -212,8 +401,8 @@ export default function Dashboard() {
                 </>
               ) : (
                 <>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Items
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Parse & Add
                 </>
               )}
             </Button>
