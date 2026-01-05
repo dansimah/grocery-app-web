@@ -1,36 +1,102 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence, PanInfo, useMotionValue, useTransform } from 'framer-motion';
-import { ShoppingCart, Check, Ban, ArrowLeft, ArrowRight, CheckCircle2, XCircle, RotateCcw } from 'lucide-react';
+import { ShoppingCart, Check, Ban, ArrowLeft, ArrowRight, CheckCircle2, XCircle, RotateCcw, Undo2, Package } from 'lucide-react';
 import { useGrocery } from '@/contexts/GroceryContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import type { GroceryItem } from '@/lib/api';
+import type { GroceryItem, ItemStatus } from '@/lib/api';
+
+interface UndoAction {
+  itemId: number;
+  previousStatus: ItemStatus;
+  productName: string;
+}
 
 export default function Shopping() {
-  const { activeItems, fetchItems, updateStatus, completeShopping } = useGrocery();
+  const { activeItems, foundItems, fetchItems, updateStatus, completeShopping } = useGrocery();
   const { toast } = useToast();
   const [isCompleting, setIsCompleting] = useState(false);
+  const [undoStack, setUndoStack] = useState<UndoAction[]>([]);
 
   useEffect(() => {
     fetchItems();
   }, [fetchItems]);
 
-  // Filter to pending and selected items only
+  // Filter items by status
   const shoppingItems = activeItems.filter(
     item => item.status === 'pending' || item.status === 'selected'
   );
   const notFoundItems = activeItems.filter(item => item.status === 'not_found');
 
-  // Group by category for progress
+  // Group found items by category
+  const foundByCategory = foundItems.reduce((acc, item) => {
+    const cat = item.category_name;
+    if (!acc[cat]) {
+      acc[cat] = { icon: item.category_icon, items: [] };
+    }
+    acc[cat].items.push(item);
+    return acc;
+  }, {} as Record<string, { icon: string; items: GroceryItem[] }>);
+
   const totalItems = shoppingItems.length;
-  const foundCount = activeItems.filter(i => i.status === 'found').length;
+  const foundCount = foundItems.length;
+
+  const handleStatusChange = useCallback(async (item: GroceryItem, newStatus: ItemStatus) => {
+    // Save to undo stack
+    setUndoStack(prev => [...prev, {
+      itemId: item.id,
+      previousStatus: item.status,
+      productName: item.product_name,
+    }]);
+    
+    await updateStatus(item.id, newStatus);
+  }, [updateStatus]);
+
+  const handleUndo = useCallback(async () => {
+    if (undoStack.length === 0) return;
+    
+    const lastAction = undoStack[undoStack.length - 1];
+    setUndoStack(prev => prev.slice(0, -1));
+    
+    try {
+      await updateStatus(lastAction.itemId, lastAction.previousStatus);
+      toast({
+        title: 'Undone',
+        description: `Restored ${lastAction.productName}`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to undo',
+        description: error instanceof Error ? error.message : 'Something went wrong',
+        variant: 'destructive',
+      });
+    }
+  }, [undoStack, updateStatus, toast]);
+
+  const handleRestore = useCallback(async (item: GroceryItem) => {
+    try {
+      await updateStatus(item.id, 'pending');
+      toast({
+        title: 'Restored',
+        description: `${item.product_name} moved back to list`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to restore',
+        description: error instanceof Error ? error.message : 'Something went wrong',
+        variant: 'destructive',
+      });
+    }
+  }, [updateStatus, toast]);
 
   const handleComplete = async () => {
     setIsCompleting(true);
     try {
       const result = await completeShopping();
+      setUndoStack([]); // Clear undo stack on complete
       toast({
         title: 'Shopping complete!',
         description: `Found ${result.foundCount} items, ${result.notFoundCount} not found`,
@@ -62,14 +128,33 @@ export default function Shopping() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-32">
       {/* Progress Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="text-center"
       >
-        <h2 className="text-2xl font-heading font-bold text-foreground mb-2">Shopping Mode</h2>
+        <div className="flex items-center justify-between mb-2">
+          <div className="w-10" /> {/* Spacer */}
+          <h2 className="text-2xl font-heading font-bold text-foreground">Shopping Mode</h2>
+          {/* Undo Button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleUndo}
+            disabled={undoStack.length === 0}
+            className="relative"
+            aria-label="Undo last action"
+          >
+            <Undo2 className="w-5 h-5" />
+            {undoStack.length > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 text-xs bg-primary text-primary-foreground rounded-full flex items-center justify-center">
+                {undoStack.length}
+              </span>
+            )}
+          </Button>
+        </div>
         <p className="text-muted-foreground">
           Swipe right for found, left for not found
         </p>
@@ -110,8 +195,8 @@ export default function Shopping() {
             <SwipeableItem
               key={item.id}
               item={item}
-              onSwipeLeft={() => updateStatus(item.id, 'not_found')}
-              onSwipeRight={() => updateStatus(item.id, 'found')}
+              onSwipeLeft={() => handleStatusChange(item, 'not_found')}
+              onSwipeRight={() => handleStatusChange(item, 'found')}
               index={index}
             />
           ))}
@@ -138,13 +223,16 @@ export default function Shopping() {
                     key={item.id}
                     className="flex items-center justify-between p-2 rounded-lg bg-red-100/50"
                   >
-                    <span className="text-red-700">
-                      {item.product_name} {item.quantity > 1 && `(x${item.quantity})`}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{item.category_icon || '📦'}</span>
+                      <span className="text-red-700">
+                        {item.product_name} {item.quantity > 1 && `(x${item.quantity})`}
+                      </span>
+                    </div>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => updateStatus(item.id, 'pending')}
+                      onClick={() => handleRestore(item)}
                       className="text-red-600 hover:text-red-800 hover:bg-red-100"
                     >
                       <RotateCcw className="w-4 h-4" />
@@ -157,18 +245,75 @@ export default function Shopping() {
         </motion.div>
       )}
 
+      {/* Found Items Section (grouped by category) */}
+      {foundItems.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <Card className="bg-emerald-50 border-emerald-200">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Check className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-heading font-semibold text-emerald-900">
+                  Found ({foundItems.length})
+                </h3>
+              </div>
+              <div className="space-y-3">
+                {Object.entries(foundByCategory).map(([category, { icon, items }]) => (
+                  <Collapsible key={category} defaultOpen={false}>
+                    <CollapsibleTrigger className="w-full">
+                      <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-100/50 hover:bg-emerald-100 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{icon || '📦'}</span>
+                          <span className="font-medium text-emerald-800">{category}</span>
+                        </div>
+                        <span className="text-sm text-emerald-600">{items.length} items</span>
+                      </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="mt-2 space-y-1 pl-8">
+                        {items.map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between p-2 rounded-lg hover:bg-emerald-100/50"
+                          >
+                            <span className="text-emerald-700 line-through">
+                              {item.product_name} {item.quantity > 1 && `(x${item.quantity})`}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRestore(item)}
+                              className="text-emerald-600 hover:text-emerald-800 hover:bg-emerald-100"
+                              title="Restore to list"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
       {/* Complete Shopping Button */}
       {(foundCount > 0 || notFoundItems.length > 0) && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="sticky bottom-20 pt-4"
+          className="fixed bottom-20 left-4 right-4 max-w-lg mx-auto"
         >
           <Button
             onClick={handleComplete}
             disabled={isCompleting}
             size="xl"
-            className="w-full gap-2"
+            className="w-full gap-2 shadow-lg"
             variant="success"
           >
             {isCompleting ? (
@@ -254,7 +399,7 @@ function SwipeableItem({ item, onSwipeLeft, onSwipeRight, index }: SwipeableItem
               item.status === 'selected' ? 'bg-primary/10' : 'bg-muted'
             )}
           >
-            {item.category_icon || '📦'}
+            {item.category_icon || <Package className="w-6 h-6 text-muted-foreground" />}
           </div>
           <div className="flex-1">
             <h3 className="font-medium text-foreground">{item.product_name}</h3>
@@ -263,11 +408,6 @@ function SwipeableItem({ item, onSwipeLeft, onSwipeRight, index }: SwipeableItem
               {item.quantity > 1 && ` • x${item.quantity}`}
             </p>
           </div>
-          {item.status === 'selected' && (
-            <div className="px-2 py-1 text-xs font-medium bg-primary/10 text-primary rounded-full">
-              Selected
-            </div>
-          )}
         </div>
       </motion.div>
     </motion.div>
