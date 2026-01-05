@@ -35,11 +35,11 @@ export default function Products() {
   const { toast } = useToast();
 
   useEffect(() => {
-    loadData();
+    loadData(true);
   }, []);
 
-  const loadData = async () => {
-    setIsLoading(true);
+  const loadData = async (showLoading = false) => {
+    if (showLoading) setIsLoading(true);
     try {
       const [productsData, categoriesData] = await Promise.all([
         api.getProducts(),
@@ -47,7 +47,10 @@ export default function Products() {
       ]);
       setProducts(productsData);
       setCategories(categoriesData);
-      setExpandedCategories(new Set(categoriesData.map(c => c.name)));
+      // Only set expanded categories on initial load
+      if (showLoading) {
+        setExpandedCategories(new Set(categoriesData.map(c => c.name)));
+      }
     } catch (error) {
       toast({
         title: 'Failed to load data',
