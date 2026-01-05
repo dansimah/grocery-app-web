@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 30 20% 98%;
+    --foreground: 20 14.3% 4.1%;
+    --card: 0 0% 100%;
+    --card-foreground: 20 14.3% 4.1%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 14.3% 4.1%;
+    --primary: 174 84% 29%;
+    --primary-foreground: 60 9.1% 97.8%;
+    --secondary: 60 4.8% 95.9%;
+    --secondary-foreground: 24 9.8% 10%;
+    --muted: 60 4.8% 95.9%;
+    --muted-foreground: 25 5.3% 44.7%;
+    --accent: 60 4.8% 95.9%;
+    --accent-foreground: 24 9.8% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 60 9.1% 97.8%;
+    --border: 20 5.9% 90%;
+    --input: 20 5.9% 90%;
+    --ring: 174 84% 29%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 20 14.3% 4.1%;
+    --foreground: 60 9.1% 97.8%;
+    --card: 20 14.3% 6%;
+    --card-foreground: 60 9.1% 97.8%;
+    --popover: 20 14.3% 6%;
+    --popover-foreground: 60 9.1% 97.8%;
+    --primary: 174 72% 46%;
+    --primary-foreground: 20 14.3% 4.1%;
+    --secondary: 20 14.3% 10%;
+    --secondary-foreground: 60 9.1% 97.8%;
+    --muted: 20 14.3% 10%;
+    --muted-foreground: 24 5.4% 63.9%;
+    --accent: 20 14.3% 10%;
+    --accent-foreground: 60 9.1% 97.8%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 60 9.1% 97.8%;
+    --border: 20 14.3% 14%;
+    --input: 20 14.3% 14%;
+    --ring: 174 72% 46%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-body;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    background: linear-gradient(180deg, hsl(30 20% 98%) 0%, hsl(30 10% 96%) 100%);
+    min-height: 100vh;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Mobile-specific optimizations */
+@layer base {
+  html {
+    /* Prevent pull-to-refresh on mobile */
+    overscroll-behavior-y: contain;
+    /* Smooth scrolling */
+    scroll-behavior: smooth;
+    /* Prevent text size adjustment */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    /* Prevent selection on tap */
+    -webkit-tap-highlight-color: transparent;
+    /* Safe area for notched phones */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Touch-friendly tap targets (minimum 44px) */
+  button, a, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Smaller buttons can override */
+  .btn-sm, [data-size="sm"], [data-size="icon"] {
+    min-height: auto;
+    min-width: auto;
+  }
+}
+
+/* Safe area adjustments for fixed elements */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-bottom {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  }
+}
+

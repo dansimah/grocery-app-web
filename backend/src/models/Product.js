@@ -1,0 +1,163 @@
+const db = require('../config/database');
+
+class Product {
+    constructor(data = {}) {
+        this.id = data.id;
+        this.name = data.name;
+        this.category_id = data.category_id;
+        this.category_name = data.category_name; // From join
+        this.category_icon = data.category_icon; // From join
+        this.created_at = data.created_at;
+        this.updated_at = data.updated_at;
+    }
+
+    // Get all products with category info
+    static async findAll() {
+        const result = await db.query(`
+            SELECT p.*, c.name as category_name, c.icon as category_icon
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            ORDER BY c.sort_order ASC, p.name ASC
+        `);
+        return result.rows.map(row => new Product(row));
+    }
+
+    // Find by ID
+    static async findById(id) {
+        const result = await db.query(`
+            SELECT p.*, c.name as category_name, c.icon as category_icon
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            WHERE p.id = $1
+        `, [id]);
+        return result.rows[0] ? new Product(result.rows[0]) : null;
+    }
+
+    // Find by exact name
+    static async findByName(name) {
+        const result = await db.query(`
+            SELECT p.*, c.name as category_name, c.icon as category_icon
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            WHERE LOWER(p.name) = LOWER($1)
+        `, [name]);
+        return result.rows[0] ? new Product(result.rows[0]) : null;
+    }
+
+    // Find by alias
+    static async findByAlias(alias) {
+        const result = await db.query(`
+            SELECT p.*, c.name as category_name, c.icon as category_icon
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            JOIN product_aliases pa ON p.id = pa.product_id
+            WHERE LOWER(pa.alias) = LOWER($1)
+        `, [alias]);
+        return result.rows[0] ? new Product(result.rows[0]) : null;
+    }
+
+    // Find by name or alias (main lookup method)
+    static async lookup(term) {
+        const normalized = term.toLowerCase().trim();
+        
+        // Try exact name match first
+        let product = await Product.findByName(normalized);
+        if (product) return product;
+
+        // Try alias match
+        product = await Product.findByAlias(normalized);
+        return product;
+    }
+
+    // Find products by category
+    static async findByCategory(categoryId) {
+        const result = await db.query(`
+            SELECT p.*, c.name as category_name, c.icon as category_icon
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            WHERE p.category_id = $1
+            ORDER BY p.name ASC
+        `, [categoryId]);
+        return result.rows.map(row => new Product(row));
+    }
+
+    // Create new product
+    static async create(name, categoryId) {
+        const result = await db.query(`
+            INSERT INTO products (name, category_id) 
+            VALUES ($1, $2) 
+            RETURNING *
+        `, [name, categoryId]);
+        return new Product(result.rows[0]);
+    }
+
+    // Update product
+    async save() {
+        const result = await db.query(`
+            UPDATE products 
+            SET name = $1, category_id = $2, updated_at = NOW() 
+            WHERE id = $3 
+            RETURNING *
+        `, [this.name, this.category_id, this.id]);
+        return result.rows[0] ? new Product(result.rows[0]) : null;
+    }
+
+    // Delete product (cascades to aliases and affects grocery_items)
+    async delete() {
+        const result = await db.query(
+            'DELETE FROM products WHERE id = $1',
+            [this.id]
+        );
+        return result.rowCount > 0;
+    }
+
+    // Get aliases for this product
+    async getAliases() {
+        const result = await db.query(
+            'SELECT alias FROM product_aliases WHERE product_id = $1 ORDER BY alias',
+            [this.id]
+        );
+        return result.rows.map(r => r.alias);
+    }
+
+    // Add alias
+    async addAlias(alias) {
+        const normalized = alias.toLowerCase().trim();
+        if (normalized === this.name.toLowerCase()) return false;
+        
+        try {
+            await db.query(
+                'INSERT INTO product_aliases (product_id, alias) VALUES ($1, $2) ON CONFLICT (alias) DO NOTHING',
+                [this.id, normalized]
+            );
+            return true;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    // Remove alias
+    async removeAlias(alias) {
+        const result = await db.query(
+            'DELETE FROM product_aliases WHERE product_id = $1 AND alias = $2',
+            [this.id, alias.toLowerCase()]
+        );
+        return result.rowCount > 0;
+    }
+
+    // Search products by partial name
+    static async search(query, limit = 20) {
+        const result = await db.query(`
+            SELECT p.*, c.name as category_name, c.icon as category_icon
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            WHERE LOWER(p.name) LIKE LOWER($1)
+            ORDER BY p.name ASC
+            LIMIT $2
+        `, [`%${query}%`, limit]);
+        return result.rows.map(row => new Product(row));
+    }
+}
+
+module.exports = Product;
+

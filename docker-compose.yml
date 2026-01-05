@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: grocery-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: grocery_user
+      POSTGRES_PASSWORD: grocery_password
+      POSTGRES_DB: grocery_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - grocery-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grocery_user -d grocery_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build: ./backend
+    container_name: grocery-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://grocery_user:grocery_password@postgres:5432/grocery_db
+      JWT_SECRET: ${JWT_SECRET:-change-this-to-a-secure-secret-in-production}
+      JWT_EXPIRES_IN: 7d
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      FRONTEND_URL: http://localhost
+      PORT: 3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - grocery-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Frontend
+  frontend:
+    build: ./frontend
+    container_name: grocery-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - grocery-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Database migration and initial seed (runs once, respects existing data)
+  migrate:
+    build: ./backend
+    container_name: grocery-migrate
+    command: sh -c "node src/config/migrate.js && node src/config/seed.js"
+    environment:
+      DATABASE_URL: postgresql://grocery_user:grocery_password@postgres:5432/grocery_db
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - grocery-network
+    restart: "no"
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  grocery-network:
+    driver: bridge
+
