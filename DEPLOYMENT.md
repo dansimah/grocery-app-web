@@ -150,20 +150,20 @@ docker run hello-world
 
 ```bash
 cd /opt
-git clone <your-repo-url> grocery-app
-cd grocery-app/grocery-app-web
+git clone <your-repo-url> grocery-app-web
+cd grocery-app-web
 ```
 
 Or copy files from your local machine:
 ```bash
 # From your local machine
-scp -r grocery-app-web root@<container-ip>:/opt/grocery-app/
+scp -r grocery-app-web root@<container-ip>:/opt/
 ```
 
 ### 4.2 Configure Environment Variables
 
 ```bash
-cd /opt/grocery-app/grocery-app-web
+cd /opt/grocery-app-web
 
 # Create .env file
 cat > .env << 'EOF'
@@ -186,7 +186,7 @@ chmod 600 .env
 ### 4.3 Build and Start Services
 
 ```bash
-cd /opt/grocery-app/grocery-app-web
+cd /opt/grocery-app-web
 
 # Build and start all services
 docker compose up -d --build
@@ -273,7 +273,7 @@ certbot --nginx -d grocery.yourdomain.com
 
 ### View Logs
 ```bash
-cd /opt/grocery-app/grocery-app-web
+cd /opt/grocery-app-web
 docker compose logs -f              # All services
 docker compose logs -f backend      # Backend only
 docker compose logs -f postgres     # Database only
@@ -287,7 +287,7 @@ docker compose restart backend      # Restart backend only
 
 ### Update Application
 ```bash
-cd /opt/grocery-app/grocery-app-web
+cd /opt/grocery-app-web
 git pull                            # If using git
 docker compose down
 docker compose up -d --build

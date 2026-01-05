@@ -39,8 +39,9 @@ A modern grocery list management application with AI-powered item parsing and ca
 
 ### Setup
 
-1. Clone the repository and navigate to the project:
+1. Clone the repository:
    ```bash
+   git clone <your-repo-url> grocery-app-web
    cd grocery-app-web
    ```
 
