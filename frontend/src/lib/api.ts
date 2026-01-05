@@ -209,6 +209,11 @@ class ApiClient {
       method: 'POST',
     });
   }
+
+  // Admin
+  async getAIStats() {
+    return this.request<AIStats>('/groceries/ai-stats');
+  }
 }
 
 // Types
@@ -298,6 +303,28 @@ export interface ShoppingSession {
   item_count: number;
   found_count: number;
   not_found_count: number;
+}
+
+export interface AIStats {
+  isInitialized: boolean;
+  model: string;
+  requestsLastMinute: number;
+  requestsLastHour: number;
+  totalRequestsAllTime: number;
+  tokensLastMinute: number;
+  tokensLastHour: number;
+  totalTokensAllTime: number;
+  successfulLastHour: number;
+  failedLastHour: number;
+  rateLimits: {
+    requestsPerMinute: number;
+    requestsPerDay: number;
+    tokensPerMinute: number;
+  };
+  usagePercent: {
+    rpm: number;
+    tpm: number;
+  };
 }
 
 export const api = new ApiClient();

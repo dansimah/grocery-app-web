@@ -190,5 +190,18 @@ router.post('/reset-selection', async (req, res) => {
     }
 });
 
+// Get AI service stats (for admin view)
+const aiService = require('../services/aiService');
+
+router.get('/ai-stats', async (req, res) => {
+    try {
+        const stats = aiService.getStats();
+        res.json(stats);
+    } catch (error) {
+        console.error('Error getting AI stats:', error);
+        res.status(500).json({ error: 'Failed to get AI stats' });
+    }
+});
+
 module.exports = router;
 

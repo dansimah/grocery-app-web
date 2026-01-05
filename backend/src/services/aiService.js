@@ -7,6 +7,11 @@ class AIService {
         this.model = null;
         this.cachedCategories = null;
         this.cacheExpiry = null;
+        
+        // Request tracking for rate limiting visibility
+        this.requestHistory = [];
+        this.totalRequests = 0;
+        this.totalTokensUsed = 0;
     }
 
     initialize() {
@@ -17,6 +22,71 @@ class AIService {
         this.genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
         this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
         console.log('✅ AI Service initialized');
+    }
+
+    // Track a request
+    trackRequest(inputTokens = 0, outputTokens = 0, success = true) {
+        const now = Date.now();
+        this.requestHistory.push({
+            timestamp: now,
+            inputTokens,
+            outputTokens,
+            success
+        });
+        this.totalRequests++;
+        this.totalTokensUsed += inputTokens + outputTokens;
+        
+        // Keep only last hour of history
+        const oneHourAgo = now - 60 * 60 * 1000;
+        this.requestHistory = this.requestHistory.filter(r => r.timestamp > oneHourAgo);
+    }
+
+    // Get stats for display
+    getStats() {
+        const now = Date.now();
+        const oneMinuteAgo = now - 60 * 1000;
+        const oneHourAgo = now - 60 * 60 * 1000;
+        
+        const lastMinute = this.requestHistory.filter(r => r.timestamp > oneMinuteAgo);
+        const lastHour = this.requestHistory.filter(r => r.timestamp > oneHourAgo);
+        
+        const lastMinuteTokens = lastMinute.reduce((sum, r) => sum + r.inputTokens + r.outputTokens, 0);
+        const lastHourTokens = lastHour.reduce((sum, r) => sum + r.inputTokens + r.outputTokens, 0);
+        
+        const successfulLastHour = lastHour.filter(r => r.success).length;
+        const failedLastHour = lastHour.filter(r => !r.success).length;
+        
+        return {
+            isInitialized: !!this.model,
+            model: 'gemini-2.5-flash',
+            
+            // Request counts
+            requestsLastMinute: lastMinute.length,
+            requestsLastHour: lastHour.length,
+            totalRequestsAllTime: this.totalRequests,
+            
+            // Token usage
+            tokensLastMinute: lastMinuteTokens,
+            tokensLastHour: lastHourTokens,
+            totalTokensAllTime: this.totalTokensUsed,
+            
+            // Success/failure
+            successfulLastHour,
+            failedLastHour,
+            
+            // Gemini 2.5 Flash rate limits (for reference)
+            rateLimits: {
+                requestsPerMinute: 15,        // Free tier RPM
+                requestsPerDay: 1500,         // Free tier RPD
+                tokensPerMinute: 1000000,     // Free tier TPM
+            },
+            
+            // Usage percentages
+            usagePercent: {
+                rpm: Math.round((lastMinute.length / 15) * 100),
+                tpm: Math.round((lastMinuteTokens / 1000000) * 100),
+            }
+        };
     }
 
     // Fetch categories from database (with caching)
@@ -50,15 +120,29 @@ class AIService {
             throw new Error('AI Service not initialized');
         }
 
+        const startTime = Date.now();
+        let inputTokens = 0;
+        let outputTokens = 0;
+
         try {
             console.log('🔍 AI Input Text:', JSON.stringify(groceryText));
             const prompt = await this.buildGroceryParsingPrompt(groceryText);
+            
+            // Estimate input tokens (rough: ~4 chars per token)
+            inputTokens = Math.ceil(prompt.length / 4);
             
             const result = await this.model.generateContent(prompt);
             const response = await result.response;
             const text = response.text();
             
+            // Estimate output tokens
+            outputTokens = Math.ceil(text.length / 4);
+            
             console.log('🤖 AI Raw Response:', text);
+            console.log(`📊 Estimated tokens - Input: ${inputTokens}, Output: ${outputTokens}`);
+
+            // Track successful request
+            this.trackRequest(inputTokens, outputTokens, true);
 
             // Try to parse the JSON response
             let parsedItems;
@@ -94,6 +178,8 @@ class AIService {
             return validatedItems;
 
         } catch (error) {
+            // Track failed request
+            this.trackRequest(inputTokens, outputTokens, false);
             console.error('Error parsing grocery items with AI:', error);
             throw new Error(`Failed to parse grocery items: ${error.message}`);
         }
@@ -137,4 +223,3 @@ ${groceryText}`;
 const aiService = new AIService();
 
 module.exports = aiService;
-
