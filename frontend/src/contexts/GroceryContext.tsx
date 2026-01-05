@@ -75,16 +75,40 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
 
   const updateStatus = useCallback(async (id: number, status: ItemStatus) => {
     await api.updateItemStatus(id, status);
-    // Optimistic update
-    setData(prev => ({
-      ...prev,
-      allItems: prev.allItems.map(item => 
+    // Optimistic update - properly move items between lists
+    setData(prev => {
+      const updatedAllItems = prev.allItems.map(item => 
         item.id === id ? { ...item, status } : item
-      ),
-      activeItems: prev.activeItems.map(item =>
-        item.id === id ? { ...item, status } : item
-      ),
-    }));
+      );
+      
+      // Find the updated item
+      const updatedItem = updatedAllItems.find(item => item.id === id);
+      
+      // Rebuild activeItems and foundItems based on new status
+      const newActiveItems = updatedAllItems.filter(item => 
+        item.status === 'pending' || item.status === 'selected' || item.status === 'not_found'
+      );
+      const newFoundItems = updatedAllItems.filter(item => item.status === 'found');
+      
+      // Rebuild grouped (for active items only, excluding found)
+      const pendingAndSelected = updatedAllItems.filter(item => 
+        item.status === 'pending' || item.status === 'selected'
+      );
+      const newGrouped = pendingAndSelected.reduce((acc, item) => {
+        const cat = item.category_name;
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push(item);
+        return acc;
+      }, {} as Record<string, GroceryItem[]>);
+      
+      return {
+        ...prev,
+        allItems: updatedAllItems,
+        activeItems: newActiveItems,
+        foundItems: newFoundItems,
+        grouped: newGrouped,
+      };
+    });
   }, []);
 
   const deleteItem = useCallback(async (id: number) => {
