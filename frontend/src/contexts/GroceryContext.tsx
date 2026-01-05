@@ -81,9 +81,6 @@ export function GroceryProvider({ children }: { children: React.ReactNode }) {
         item.id === id ? { ...item, status } : item
       );
       
-      // Find the updated item
-      const updatedItem = updatedAllItems.find(item => item.id === id);
-      
       // Rebuild activeItems and foundItems based on new status
       const newActiveItems = updatedAllItems.filter(item => 
         item.status === 'pending' || item.status === 'selected' || item.status === 'not_found'
