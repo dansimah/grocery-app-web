@@ -58,7 +58,8 @@ class AIService {
         
         return {
             isInitialized: !!this.model,
-            model: 'gemini-2.5-flash',
+            // model: 'gemini-2.5-flash',
+            model: 'gemini-2.5-flash-lite',
             
             // Request counts
             requestsLastMinute: lastMinute.length,
