@@ -1,5 +1,6 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Category = require('../models/Category');
+const AILog = require('../models/AILog');
 
 class AIService {
     constructor() {
@@ -8,10 +9,13 @@ class AIService {
         this.cachedCategories = null;
         this.cacheExpiry = null;
         
-        // Request tracking for rate limiting visibility
+        // Request tracking for rate limiting visibility (in-memory for real-time stats)
         this.requestHistory = [];
         this.totalRequests = 0;
         this.totalTokensUsed = 0;
+        
+        // Recent failure logs (in-memory cache for quick access)
+        this.recentFailures = [];
     }
 
     initialize() {
@@ -24,9 +28,11 @@ class AIService {
         console.log('✅ AI Service initialized');
     }
 
-    // Track a request
-    trackRequest(inputTokens = 0, outputTokens = 0, success = true) {
+    // Track a request (logs to both in-memory and database)
+    async trackRequest({ inputTokens = 0, outputTokens = 0, success = true, inputText = null, errorMessage = null, errorType = null, responseTimeMs = null }) {
         const now = Date.now();
+        
+        // In-memory tracking for real-time stats
         this.requestHistory.push({
             timestamp: now,
             inputTokens,
@@ -36,12 +42,38 @@ class AIService {
         this.totalRequests++;
         this.totalTokensUsed += inputTokens + outputTokens;
         
-        // Keep only last hour of history
+        // Keep only last hour of history in memory
         const oneHourAgo = now - 60 * 60 * 1000;
         this.requestHistory = this.requestHistory.filter(r => r.timestamp > oneHourAgo);
+        
+        // Track failures in memory for quick access
+        if (!success) {
+            this.recentFailures.push({
+                timestamp: now,
+                errorMessage,
+                errorType,
+                inputText: inputText ? inputText.substring(0, 200) : null
+            });
+            // Keep only last 20 failures in memory
+            if (this.recentFailures.length > 20) {
+                this.recentFailures = this.recentFailures.slice(-20);
+            }
+        }
+        
+        // Log to database (async, don't await to avoid blocking)
+        AILog.create({
+            requestType: 'grocery_parse',
+            inputText,
+            success,
+            errorMessage,
+            errorType,
+            inputTokens,
+            outputTokens,
+            responseTimeMs
+        }).catch(err => console.error('Failed to log to DB:', err.message));
     }
 
-    // Get stats for display
+    // Get stats for display (includes recent failures from memory)
     getStats() {
         const now = Date.now();
         const oneMinuteAgo = now - 60 * 1000;
@@ -58,8 +90,7 @@ class AIService {
         
         return {
             isInitialized: !!this.model,
-            // model: 'gemini-2.5-flash',
-            model: 'gemini-2.5-flash-lite',
+            model: 'gemini-2.5-flash',
             
             // Request counts
             requestsLastMinute: lastMinute.length,
@@ -75,6 +106,14 @@ class AIService {
             successfulLastHour,
             failedLastHour,
             
+            // Recent failures (from memory for quick access)
+            recentFailures: this.recentFailures.slice(-10).reverse().map(f => ({
+                timestamp: new Date(f.timestamp).toISOString(),
+                errorType: f.errorType,
+                errorMessage: f.errorMessage,
+                inputPreview: f.inputText
+            })),
+            
             // Gemini 2.5 Flash rate limits (for reference)
             rateLimits: {
                 requestsPerMinute: 15,        // Free tier RPM
@@ -88,6 +127,43 @@ class AIService {
                 tpm: Math.round((lastMinuteTokens / 1000000) * 100),
             }
         };
+    }
+
+    // Get detailed stats from database (for admin/debugging)
+    async getDetailedStats(hoursBack = 24) {
+        try {
+            const [dbStats, recentFailures] = await Promise.all([
+                AILog.getStats(hoursBack),
+                AILog.findFailures(10)
+            ]);
+            
+            return {
+                ...this.getStats(),
+                database: {
+                    period: `last ${hoursBack} hours`,
+                    totalRequests: parseInt(dbStats.total_requests) || 0,
+                    successful: parseInt(dbStats.successful) || 0,
+                    failed: parseInt(dbStats.failed) || 0,
+                    totalInputTokens: parseInt(dbStats.total_input_tokens) || 0,
+                    totalOutputTokens: parseInt(dbStats.total_output_tokens) || 0,
+                    avgResponseTimeMs: Math.round(parseFloat(dbStats.avg_response_time_ms) || 0)
+                },
+                recentFailuresFromDb: recentFailures.map(f => ({
+                    id: f.id,
+                    timestamp: f.created_at,
+                    errorType: f.error_type,
+                    errorMessage: f.error_message,
+                    inputPreview: f.input_text ? f.input_text.substring(0, 200) : null,
+                    responseTimeMs: f.response_time_ms
+                }))
+            };
+        } catch (error) {
+            console.error('Failed to get detailed stats from DB:', error.message);
+            return {
+                ...this.getStats(),
+                database: { error: error.message }
+            };
+        }
     }
 
     // Fetch categories from database (with caching)
@@ -117,13 +193,25 @@ class AIService {
     }
 
     async parseGroceryItems(groceryText) {
-        if (!this.model) {
-            throw new Error('AI Service not initialized');
-        }
-
         const startTime = Date.now();
         let inputTokens = 0;
         let outputTokens = 0;
+
+        // Check initialization before proceeding
+        if (!this.model) {
+            const errorMsg = 'AI Service not initialized - GOOGLE_API_KEY may be missing';
+            console.error('❌', errorMsg);
+            this.trackRequest({
+                inputTokens: 0,
+                outputTokens: 0,
+                success: false,
+                inputText: groceryText,
+                errorMessage: errorMsg,
+                errorType: 'NOT_INITIALIZED',
+                responseTimeMs: 0
+            });
+            throw new Error(errorMsg);
+        }
 
         try {
             console.log('🔍 AI Input Text:', JSON.stringify(groceryText));
@@ -132,18 +220,17 @@ class AIService {
             // Estimate input tokens (rough: ~4 chars per token)
             inputTokens = Math.ceil(prompt.length / 4);
             
+            console.log('📤 Sending request to Gemini API...');
             const result = await this.model.generateContent(prompt);
             const response = await result.response;
             const text = response.text();
+            const responseTimeMs = Date.now() - startTime;
             
             // Estimate output tokens
             outputTokens = Math.ceil(text.length / 4);
             
             console.log('🤖 AI Raw Response:', text);
-            console.log(`📊 Estimated tokens - Input: ${inputTokens}, Output: ${outputTokens}`);
-
-            // Track successful request
-            this.trackRequest(inputTokens, outputTokens, true);
+            console.log(`📊 Estimated tokens - Input: ${inputTokens}, Output: ${outputTokens}, Time: ${responseTimeMs}ms`);
 
             // Try to parse the JSON response
             let parsedItems;
@@ -154,11 +241,29 @@ class AIService {
                 parsedItems = JSON.parse(cleanedText);
             } catch (parseError) {
                 console.error('Failed to parse AI response as JSON:', text);
+                this.trackRequest({
+                    inputTokens,
+                    outputTokens,
+                    success: false,
+                    inputText: groceryText,
+                    errorMessage: `JSON parse failed: ${parseError.message}`,
+                    errorType: 'JSON_PARSE_ERROR',
+                    responseTimeMs
+                });
                 throw new Error('AI response was not valid JSON');
             }
 
             // Validate the response structure
             if (!Array.isArray(parsedItems)) {
+                this.trackRequest({
+                    inputTokens,
+                    outputTokens,
+                    success: false,
+                    inputText: groceryText,
+                    errorMessage: 'Response was not an array',
+                    errorType: 'INVALID_RESPONSE_STRUCTURE',
+                    responseTimeMs
+                });
                 throw new Error('AI response was not an array');
             }
 
@@ -175,13 +280,49 @@ class AIService {
                 };
             });
 
-            console.log(`✅ AI parsed ${validatedItems.length} items from grocery list`);
+            // Track successful request
+            this.trackRequest({
+                inputTokens,
+                outputTokens,
+                success: true,
+                inputText: groceryText,
+                responseTimeMs
+            });
+
+            console.log(`✅ AI parsed ${validatedItems.length} items from grocery list in ${responseTimeMs}ms`);
             return validatedItems;
 
         } catch (error) {
-            // Track failed request
-            this.trackRequest(inputTokens, outputTokens, false);
-            console.error('Error parsing grocery items with AI:', error);
+            const responseTimeMs = Date.now() - startTime;
+            
+            // Determine error type for better debugging
+            let errorType = 'UNKNOWN';
+            if (error.message?.includes('API key')) {
+                errorType = 'API_KEY_ERROR';
+            } else if (error.message?.includes('quota') || error.message?.includes('rate')) {
+                errorType = 'RATE_LIMIT';
+            } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+                errorType = 'NETWORK_ERROR';
+            } else if (error.message?.includes('timeout')) {
+                errorType = 'TIMEOUT';
+            } else if (error.message?.includes('JSON') || error.message?.includes('parse')) {
+                errorType = 'PARSE_ERROR';
+            }
+            
+            // Track failed request (if not already tracked above)
+            if (errorType === 'UNKNOWN' || errorType === 'API_KEY_ERROR' || errorType === 'RATE_LIMIT' || errorType === 'NETWORK_ERROR' || errorType === 'TIMEOUT') {
+                this.trackRequest({
+                    inputTokens,
+                    outputTokens,
+                    success: false,
+                    inputText: groceryText,
+                    errorMessage: error.message,
+                    errorType,
+                    responseTimeMs
+                });
+            }
+            
+            console.error(`❌ Error parsing grocery items with AI (${errorType}):`, error.message);
             throw new Error(`Failed to parse grocery items: ${error.message}`);
         }
     }

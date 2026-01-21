@@ -66,6 +66,20 @@ CREATE TABLE IF NOT EXISTS grocery_history (
     shopping_session_id VARCHAR(50)
 );
 
+-- AI request logs (for debugging and monitoring)
+CREATE TABLE IF NOT EXISTS ai_logs (
+    id SERIAL PRIMARY KEY,
+    request_type VARCHAR(50) NOT NULL,
+    input_text TEXT,
+    success BOOLEAN NOT NULL,
+    error_message TEXT,
+    error_type VARCHAR(100),
+    input_tokens INTEGER DEFAULT 0,
+    output_tokens INTEGER DEFAULT 0,
+    response_time_ms INTEGER,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
@@ -76,6 +90,8 @@ CREATE INDEX IF NOT EXISTS idx_grocery_items_product ON grocery_items(product_id
 CREATE INDEX IF NOT EXISTS idx_grocery_items_status ON grocery_items(status);
 CREATE INDEX IF NOT EXISTS idx_grocery_history_user ON grocery_history(user_id);
 CREATE INDEX IF NOT EXISTS idx_grocery_history_session ON grocery_history(shopping_session_id);
+CREATE INDEX IF NOT EXISTS idx_ai_logs_created ON ai_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_ai_logs_success ON ai_logs(success);
 `;
 
 async function runMigrations() {
