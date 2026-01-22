@@ -53,13 +53,14 @@ export default function MealDialog({
     }
   }, [open, meal]);
 
-  // Filter products by search query
+  // Filter products by search query (includes aliases)
   const filteredProducts = useMemo(() => {
     if (!searchQuery.trim()) return products;
     const query = searchQuery.toLowerCase();
     return products.filter(p => 
       p.name.toLowerCase().includes(query) ||
-      p.category_name?.toLowerCase().includes(query)
+      p.category_name?.toLowerCase().includes(query) ||
+      p.aliases?.some(alias => alias.toLowerCase().includes(query))
     );
   }, [products, searchQuery]);
 

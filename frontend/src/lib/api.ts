@@ -316,6 +316,7 @@ export interface Product {
   category_icon: string;
   created_at: string;
   updated_at: string;
+  aliases?: string[];
 }
 
 export type ItemStatus = 'pending' | 'selected' | 'found' | 'not_found';

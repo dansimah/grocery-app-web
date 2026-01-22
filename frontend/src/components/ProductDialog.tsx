@@ -176,8 +176,8 @@ export default function ProductDialog({
         });
         toast({ title: "Product updated" });
       } else {
-        // Create new product
-        savedProduct = await api.createProduct(name.trim(), categoryId);
+        // Create new product (include aliases if any were added)
+        savedProduct = await api.createProduct(name.trim(), categoryId, aliases.length > 0 ? aliases : undefined);
         toast({ title: "Product created" });
       }
       
@@ -195,25 +195,46 @@ export default function ProductDialog({
   };
 
   const handleAddAlias = async () => {
-    if (!productId || !newAlias.trim()) return;
-    try {
-      const result = await api.addProductAlias(productId, newAlias.trim());
-      setAliases(result.aliases);
+    if (!newAlias.trim()) return;
+    
+    const trimmedAlias = newAlias.trim();
+    
+    // Check for duplicates
+    if (aliases.some(a => a.toLowerCase() === trimmedAlias.toLowerCase())) {
+      toast({ title: "Alias already exists", variant: "destructive" });
+      return;
+    }
+    
+    if (isEditMode && productId) {
+      // Edit mode: persist to server
+      try {
+        const result = await api.addProductAlias(productId, trimmedAlias);
+        setAliases(result.aliases);
+        setNewAlias("");
+        toast({ title: "Alias added" });
+      } catch {
+        toast({ title: "Failed to add alias", variant: "destructive" });
+      }
+    } else {
+      // Create mode: just update local state
+      setAliases([...aliases, trimmedAlias]);
       setNewAlias("");
-      toast({ title: "Alias added" });
-    } catch {
-      toast({ title: "Failed to add alias", variant: "destructive" });
     }
   };
 
   const handleRemoveAlias = async (alias: string) => {
-    if (!productId) return;
-    try {
-      const result = await api.removeProductAlias(productId, alias);
-      setAliases(result.aliases);
-      toast({ title: "Alias removed" });
-    } catch {
-      toast({ title: "Failed to remove alias", variant: "destructive" });
+    if (isEditMode && productId) {
+      // Edit mode: persist to server
+      try {
+        const result = await api.removeProductAlias(productId, alias);
+        setAliases(result.aliases);
+        toast({ title: "Alias removed" });
+      } catch {
+        toast({ title: "Failed to remove alias", variant: "destructive" });
+      }
+    } else {
+      // Create mode: just update local state
+      setAliases(aliases.filter(a => a !== alias));
     }
   };
 

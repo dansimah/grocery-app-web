@@ -11,15 +11,22 @@ class Product {
         this.updated_at = data.updated_at;
     }
 
-    // Get all products with category info
+    // Get all products with category info and aliases
     static async findAll() {
         const result = await db.query(`
-            SELECT p.*, c.name as category_name, c.icon as category_icon
+            SELECT p.*, c.name as category_name, c.icon as category_icon,
+                   COALESCE(array_agg(pa.alias) FILTER (WHERE pa.alias IS NOT NULL), '{}') as aliases
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
+            LEFT JOIN product_aliases pa ON p.id = pa.product_id
+            GROUP BY p.id, c.name, c.icon, c.sort_order
             ORDER BY c.sort_order ASC, p.name ASC
         `);
-        return result.rows.map(row => new Product(row));
+        return result.rows.map(row => {
+            const product = new Product(row);
+            product.aliases = row.aliases || [];
+            return product;
+        });
     }
 
     // Find by ID
