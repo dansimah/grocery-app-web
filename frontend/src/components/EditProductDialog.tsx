@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { api, Product, Category, SpellSuggestResponse } from "@/lib/api";
+import { api, Product, Category } from "@/lib/api";
 
 interface EditProductDialogProps {
   productId: number | null;
