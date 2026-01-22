@@ -123,6 +123,19 @@ class ApiClient {
     });
   }
 
+  async fixProductSpelling(productId: number) {
+    return this.request<Product & { aliases: string[]; corrected: boolean; originalName: string | null }>(
+      `/products/${productId}/fix-spelling`,
+      { method: 'POST' }
+    );
+  }
+
+  async getSpellSuggestions(text: string) {
+    return this.request<SpellSuggestResponse>(
+      `/products/spell-suggest?text=${encodeURIComponent(text)}`
+    );
+  }
+
   // Groceries
   async getGroceries() {
     return this.request<GroceryListResponse>('/groceries');
@@ -213,6 +226,70 @@ class ApiClient {
   // Admin
   async getAIStats() {
     return this.request<AIStats>('/groceries/ai-stats');
+  }
+
+  // Meals
+  async getMeals() {
+    return this.request<Meal[]>('/meals');
+  }
+
+  async getMeal(id: number) {
+    return this.request<MealWithProducts>(`/meals/${id}`);
+  }
+
+  async createMeal(name: string, productIds: number[]) {
+    return this.request<MealWithProducts>('/meals', {
+      method: 'POST',
+      body: JSON.stringify({ name, product_ids: productIds }),
+    });
+  }
+
+  async updateMeal(id: number, name: string, productIds: number[]) {
+    return this.request<MealWithProducts>(`/meals/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name, product_ids: productIds }),
+    });
+  }
+
+  async deleteMeal(id: number) {
+    return this.request<{ message: string }>(`/meals/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Menu Planning
+  async getMenuPlan(weekStart?: string) {
+    const query = weekStart ? `?week_start=${weekStart}` : '';
+    return this.request<MenuPlanResponse>(`/menu${query}`);
+  }
+
+  async getMenuProducts(weekStart?: string) {
+    const query = weekStart ? `?week_start=${weekStart}` : '';
+    return this.request<MenuProduct[]>(`/menu/products${query}`);
+  }
+
+  async getMealProducts(mealId: number) {
+    return this.request<MenuProduct[]>(`/menu/meal/${mealId}/products`);
+  }
+
+  async addMealToDay(weekStart: string, dayOfWeek: number, mealType: 'lunch' | 'dinner', mealId: number) {
+    return this.request<MenuPlanResponse>('/menu/day', {
+      method: 'POST',
+      body: JSON.stringify({ week_start: weekStart, day_of_week: dayOfWeek, meal_type: mealType, meal_id: mealId }),
+    });
+  }
+
+  async removeMealFromDay(planItemId: number) {
+    return this.request<{ message: string }>(`/menu/item/${planItemId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async addProductsToGroceries(productIds: number[]) {
+    return this.request<{ message: string; addedCount: number; skippedCount: number; batchId: string }>('/menu/add-to-groceries', {
+      method: 'POST',
+      body: JSON.stringify({ product_ids: productIds }),
+    });
   }
 }
 
@@ -325,6 +402,65 @@ export interface AIStats {
     rpm: number;
     tpm: number;
   };
+}
+
+export interface Meal {
+  id: number;
+  user_id: number;
+  name: string;
+  product_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MealProduct {
+  id: number;
+  name: string;
+  category_name: string;
+  category_icon: string;
+}
+
+export interface MealWithProducts extends Meal {
+  products: MealProduct[];
+}
+
+export interface MenuPlanItem {
+  id: number;
+  meal_id: number;
+  meal_name: string;
+  meal_type: 'lunch' | 'dinner';
+  product_count: number;
+}
+
+export interface DayPlan {
+  lunch: MenuPlanItem[];
+  dinner: MenuPlanItem[];
+}
+
+export interface MenuPlanResponse {
+  weekStart: string;
+  plan: Record<number, DayPlan>;
+}
+
+export interface MenuProduct {
+  id: number;
+  name: string;
+  category_name: string;
+  category_icon: string;
+  sort_order?: number;
+}
+
+export interface SpellWordSuggestion {
+  word: string;
+  language: string;
+  suggestions: string[];
+}
+
+export interface SpellSuggestResponse {
+  available: boolean;
+  message?: string;
+  words: SpellWordSuggestion[];
+  combinedSuggestions: string[];
 }
 
 export const api = new ApiClient();

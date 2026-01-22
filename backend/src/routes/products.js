@@ -4,11 +4,42 @@ const Product = require('../models/Product');
 const Category = require('../models/Category');
 const authMiddleware = require('../middleware/auth');
 const aiService = require('../services/aiService');
+const spellService = require('../services/spellService');
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(authMiddleware);
+
+// Spell check suggestions for product name
+router.get('/spell-suggest', [
+    query('text').trim().isLength({ min: 1, max: 200 })
+], async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+
+        if (!spellService.isInitialized()) {
+            return res.json({ 
+                available: false, 
+                message: 'Spell service not ready',
+                words: [],
+                combinedSuggestions: []
+            });
+        }
+
+        const result = spellService.checkProductName(req.query.text);
+        res.json({
+            available: true,
+            ...result
+        });
+    } catch (error) {
+        console.error('Error checking spelling:', error);
+        res.status(500).json({ error: 'Failed to check spelling' });
+    }
+});
 
 // Get all categories
 router.get('/categories', async (req, res) => {
@@ -225,6 +256,46 @@ router.delete('/:id', [
     } catch (error) {
         console.error('Error deleting product:', error);
         res.status(500).json({ error: 'Failed to delete product' });
+    }
+});
+
+// Fix product spelling using AI
+router.post('/:id/fix-spelling', [
+    param('id').isInt()
+], async (req, res) => {
+    try {
+        const product = await Product.findById(req.params.id);
+        if (!product) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        const originalName = product.name;
+        const correctedName = await aiService.correctSpelling(originalName);
+        
+        // Check if the name actually changed
+        const nameChanged = correctedName.toLowerCase().trim() !== originalName.toLowerCase().trim();
+        
+        if (nameChanged) {
+            // Add original name as alias before updating
+            await product.addAlias(originalName);
+            
+            // Update product name
+            product.name = correctedName;
+            await product.save();
+        }
+
+        const aliases = await product.getAliases();
+        const fullProduct = await Product.findById(product.id);
+        
+        res.json({ 
+            ...fullProduct, 
+            aliases,
+            corrected: nameChanged,
+            originalName: nameChanged ? originalName : null
+        });
+    } catch (error) {
+        console.error('Error fixing product spelling:', error);
+        res.status(500).json({ error: error.message || 'Failed to fix spelling' });
     }
 });
 

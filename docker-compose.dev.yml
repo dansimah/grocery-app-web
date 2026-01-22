@@ -1,0 +1,22 @@
+# Development database only - use with: docker-compose -f docker-compose.dev.yml up -d
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: grocery-postgres-dev
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: grocery_user
+      POSTGRES_PASSWORD: grocery_password
+      POSTGRES_DB: grocery_db
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grocery_user -d grocery_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_dev_data:
+    driver: local

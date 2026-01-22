@@ -80,6 +80,59 @@ CREATE TABLE IF NOT EXISTS ai_logs (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Meals table (user-defined recipes)
+CREATE TABLE IF NOT EXISTS meals (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Meal items (products in a meal)
+CREATE TABLE IF NOT EXISTS meal_items (
+    id SERIAL PRIMARY KEY,
+    meal_id INTEGER REFERENCES meals(id) ON DELETE CASCADE,
+    product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(meal_id, product_id)
+);
+
+-- Menu plans (weekly meal planning)
+CREATE TABLE IF NOT EXISTS menu_plan_items (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    week_start DATE NOT NULL,
+    day_of_week INTEGER NOT NULL CHECK (day_of_week >= 0 AND day_of_week <= 6),
+    meal_type VARCHAR(20) NOT NULL DEFAULT 'dinner',
+    meal_id INTEGER REFERENCES meals(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(user_id, week_start, day_of_week, meal_type, meal_id)
+);
+
+-- Migration: Add meal_type column and update constraint
+DO $$ 
+BEGIN
+    -- Add meal_type column if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'menu_plan_items' AND column_name = 'meal_type') THEN
+        ALTER TABLE menu_plan_items ADD COLUMN meal_type VARCHAR(20) NOT NULL DEFAULT 'dinner';
+    END IF;
+    
+    -- Drop old constraint if it exists (without meal_type)
+    IF EXISTS (SELECT 1 FROM pg_constraint 
+               WHERE conname = 'menu_plan_items_user_id_week_start_day_of_week_meal_id_key') THEN
+        ALTER TABLE menu_plan_items DROP CONSTRAINT menu_plan_items_user_id_week_start_day_of_week_meal_id_key;
+    END IF;
+    
+    -- Create new constraint with meal_type if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint 
+                   WHERE conname = 'menu_plan_items_user_id_week_start_day_of_week_meal_type_m_key') THEN
+        ALTER TABLE menu_plan_items ADD CONSTRAINT menu_plan_items_user_id_week_start_day_of_week_meal_type_m_key 
+            UNIQUE(user_id, week_start, day_of_week, meal_type, meal_id);
+    END IF;
+END $$;
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
@@ -92,6 +145,11 @@ CREATE INDEX IF NOT EXISTS idx_grocery_history_user ON grocery_history(user_id);
 CREATE INDEX IF NOT EXISTS idx_grocery_history_session ON grocery_history(shopping_session_id);
 CREATE INDEX IF NOT EXISTS idx_ai_logs_created ON ai_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_ai_logs_success ON ai_logs(success);
+CREATE INDEX IF NOT EXISTS idx_meals_user ON meals(user_id);
+CREATE INDEX IF NOT EXISTS idx_meal_items_meal ON meal_items(meal_id);
+CREATE INDEX IF NOT EXISTS idx_meal_items_product ON meal_items(product_id);
+CREATE INDEX IF NOT EXISTS idx_menu_plan_items_user ON menu_plan_items(user_id);
+CREATE INDEX IF NOT EXISTS idx_menu_plan_items_week ON menu_plan_items(week_start);
 `;
 
 async function runMigrations() {

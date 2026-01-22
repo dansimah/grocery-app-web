@@ -1,0 +1,23 @@
+{
+  "name": "grocery-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Grocery List App - Monorepo",
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c blue,green \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "dev:db": "docker-compose -f docker-compose.dev.yml up -d",
+    "dev:db:stop": "docker-compose -f docker-compose.dev.yml down",
+    "dev:db:logs": "docker-compose -f docker-compose.dev.yml logs -f",
+    "dev:full": "npm run dev:db && npm run dev:db:wait && npm run dev",
+    "dev:db:wait": "node -e \"const { execSync } = require('child_process'); let ready = false; for (let i = 0; i < 30 && !ready; i++) { try { execSync('docker exec grocery-postgres-dev pg_isready -U grocery_user -d grocery_db', { stdio: 'ignore' }); ready = true; } catch { console.log('Waiting for database...'); require('child_process').execSync('timeout /t 1 >nul || sleep 1', { stdio: 'ignore' }); } } if (!ready) { console.error('Database not ready'); process.exit(1); } console.log('Database ready!');\"",
+    "setup": "npm install && npm install --prefix backend && npm install --prefix frontend && npm run dev:db && npm run dev:db:wait && npm run db:setup",
+    "db:migrate": "npm run db:migrate --prefix backend",
+    "db:seed": "npm run db:seed --prefix backend",
+    "db:setup": "npm run db:setup --prefix backend",
+    "build": "npm run build --prefix frontend",
+    "lint": "npm run lint --prefix frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

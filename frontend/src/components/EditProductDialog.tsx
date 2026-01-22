@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Plus, X } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Plus, X, Sparkles, Loader2, SpellCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { api, Product, Category } from "@/lib/api";
+import { api, Product, Category, SpellSuggestResponse } from "@/lib/api";
 
 interface EditProductDialogProps {
   productId: number | null;
@@ -38,13 +38,56 @@ export default function EditProductDialog({
   const [categories, setCategories] = useState<Category[]>([]);
   const [newAlias, setNewAlias] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isFixingSpelling, setIsFixingSpelling] = useState(false);
+  const [spellSuggestions, setSpellSuggestions] = useState<string[]>([]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load product and categories when dialog opens
   useEffect(() => {
     if (open && productId) {
       loadData();
+      setSpellSuggestions([]);
     }
   }, [open, productId]);
+
+  // Debounced spell check
+  const checkSpelling = useCallback(async (name: string) => {
+    if (!name || name.length < 2) {
+      setSpellSuggestions([]);
+      return;
+    }
+
+    try {
+      const result = await api.getSpellSuggestions(name);
+      if (result.available && result.combinedSuggestions.length > 0) {
+        setSpellSuggestions(result.combinedSuggestions);
+      } else {
+        setSpellSuggestions([]);
+      }
+    } catch {
+      // Silently fail - spell check is optional
+      setSpellSuggestions([]);
+    }
+  }, []);
+
+  // Trigger spell check when product name changes
+  useEffect(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    if (product?.name) {
+      debounceRef.current = setTimeout(() => {
+        checkSpelling(product.name);
+      }, 500); // 500ms debounce
+    }
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [product?.name, checkSpelling]);
 
   const loadData = async () => {
     if (!productId) return;
@@ -111,6 +154,39 @@ export default function EditProductDialog({
     }
   };
 
+  const handleFixSpelling = async () => {
+    if (!product) return;
+    setIsFixingSpelling(true);
+    try {
+      const result = await api.fixProductSpelling(product.id);
+      setProduct({ ...product, name: result.name, aliases: result.aliases });
+      setSpellSuggestions([]);
+      
+      if (result.corrected) {
+        toast({ 
+          title: "Spelling corrected",
+          description: `"${result.originalName}" → "${result.name}"`,
+        });
+      } else {
+        toast({ title: "No spelling changes needed" });
+      }
+    } catch (error) {
+      toast({ 
+        title: "Failed to fix spelling", 
+        description: error instanceof Error ? error.message : "Something went wrong",
+        variant: "destructive" 
+      });
+    } finally {
+      setIsFixingSpelling(false);
+    }
+  };
+
+  const applySuggestion = (suggestion: string) => {
+    if (!product) return;
+    setProduct({ ...product, name: suggestion });
+    setSpellSuggestions([]);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -125,13 +201,44 @@ export default function EditProductDialog({
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="product-name">Name</Label>
-              <Input
-                id="product-name"
-                value={product.name}
-                onChange={(e) =>
-                  setProduct({ ...product, name: e.target.value })
-                }
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="product-name"
+                  value={product.name}
+                  onChange={(e) =>
+                    setProduct({ ...product, name: e.target.value })
+                  }
+                  className="flex-1"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleFixSpelling}
+                  disabled={isFixingSpelling}
+                  title="Fix spelling with AI"
+                  className="shrink-0"
+                >
+                  {isFixingSpelling ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+              {spellSuggestions.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  <SpellCheck className="w-3.5 h-3.5 text-amber-500 mt-1" />
+                  {spellSuggestions.map((suggestion, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => applySuggestion(suggestion)}
+                      className="px-2 py-0.5 text-sm bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 rounded border border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900 transition-colors"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">

@@ -4,7 +4,7 @@ import { Trash2, Plus, Minus } from "lucide-react";
 import { useGrocery } from "@/contexts/GroceryContext";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import EditProductDialog from "@/components/EditProductDialog";
+import ProductDialog from "@/components/ProductDialog";
 import type { GroceryItem } from "@/lib/api";
 
 interface ItemCardProps {
@@ -214,11 +214,12 @@ export default function ItemCard({ item }: ItemCardProps) {
       </motion.div>
 
       {/* Edit Product Dialog */}
-      <EditProductDialog
+      <ProductDialog
+        mode="edit"
         productId={item.product_id}
         open={isProductEditOpen}
         onOpenChange={setIsProductEditOpen}
-        onSaved={fetchItems}
+        onSaved={() => fetchItems()}
       />
     </>
   );

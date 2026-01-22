@@ -7,6 +7,7 @@ const rateLimit = require('express-rate-limit');
 const { validateEnv } = require('./config/env');
 const db = require('./config/database');
 const aiService = require('./services/aiService');
+const spellService = require('./services/spellService');
 
 // Validate environment before anything else
 validateEnv();
@@ -16,6 +17,8 @@ const authRoutes = require('./routes/auth');
 const groceriesRoutes = require('./routes/groceries');
 const historyRoutes = require('./routes/history');
 const productsRoutes = require('./routes/products');
+const mealsRoutes = require('./routes/meals');
+const menuRoutes = require('./routes/menu');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -80,10 +83,15 @@ app.get('/health', async (req, res) => {
 });
 
 // Routes with specific rate limits
-app.use('/api/auth', authLimiter, authRoutes);
+// Only apply auth rate limiter to login/register, not to /me
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/auth', authRoutes);
 app.use('/api/groceries', groceriesRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/products', productsRoutes);
+app.use('/api/meals', mealsRoutes);
+app.use('/api/menu', menuRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -118,6 +126,11 @@ async function start() {
 
         // Initialize AI service
         aiService.initialize();
+
+        // Initialize spell service (async, non-blocking)
+        spellService.initialize().catch(err => 
+            console.warn('⚠️ Spell service init failed:', err.message)
+        );
 
         app.listen(PORT, () => {
             console.log(`🚀 Server running on port ${PORT}`);

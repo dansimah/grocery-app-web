@@ -359,6 +359,73 @@ RULES:
 Parse and correct this French grocery list (each line is one item):
 ${groceryText}`;
     }
+
+    // Correct spelling for a single product name (multilingual: Hebrew, French, English)
+    async correctSpelling(productName) {
+        const startTime = Date.now();
+        let inputTokens = 0;
+        let outputTokens = 0;
+
+        if (!this.model) {
+            const errorMsg = 'AI Service not initialized - GOOGLE_API_KEY may be missing';
+            console.error('❌', errorMsg);
+            throw new Error(errorMsg);
+        }
+
+        try {
+            const prompt = `You are a spelling correction assistant for grocery product names.
+The input can be in Hebrew, French, or English (or a mix).
+
+RULES:
+1. Fix spelling and grammar errors while preserving the language
+2. Keep proper nouns and brand names as-is if recognizable
+3. If the word is in Hebrew, keep it in Hebrew with correct spelling
+4. If the word is in French, keep it in French with correct spelling
+5. If the word is in English, keep it in English with correct spelling
+6. Preserve capitalization style (if input is lowercase, keep lowercase)
+7. Return ONLY the corrected text, nothing else
+
+Input: "${productName}"
+Corrected:`;
+
+            inputTokens = Math.ceil(prompt.length / 4);
+            
+            const result = await this.model.generateContent(prompt);
+            const response = await result.response;
+            const correctedName = response.text().trim();
+            const responseTimeMs = Date.now() - startTime;
+            
+            outputTokens = Math.ceil(correctedName.length / 4);
+            
+            console.log(`🔤 Spelling correction: "${productName}" → "${correctedName}" (${responseTimeMs}ms)`);
+
+            this.trackRequest({
+                inputTokens,
+                outputTokens,
+                success: true,
+                inputText: productName,
+                responseTimeMs
+            });
+
+            return correctedName;
+
+        } catch (error) {
+            const responseTimeMs = Date.now() - startTime;
+            
+            this.trackRequest({
+                inputTokens,
+                outputTokens,
+                success: false,
+                inputText: productName,
+                errorMessage: error.message,
+                errorType: 'SPELLING_CORRECTION_ERROR',
+                responseTimeMs
+            });
+            
+            console.error('❌ Error correcting spelling:', error.message);
+            throw new Error(`Failed to correct spelling: ${error.message}`);
+        }
+    }
 }
 
 // Create singleton instance

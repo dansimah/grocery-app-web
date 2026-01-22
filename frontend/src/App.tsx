@@ -6,6 +6,8 @@ import Dashboard from './pages/Dashboard';
 import Shopping from './pages/Shopping';
 import History from './pages/History';
 import Products from './pages/Products';
+import Meals from './pages/Meals';
+import MenuPlanner from './pages/MenuPlanner';
 import Layout from './components/Layout';
 import LoadingSpinner from './components/LoadingSpinner';
 
@@ -58,6 +60,8 @@ export default function App() {
       >
         <Route index element={<Dashboard />} />
         <Route path="shopping" element={<Shopping />} />
+        <Route path="menu" element={<MenuPlanner />} />
+        <Route path="meals" element={<Meals />} />
         <Route path="products" element={<Products />} />
         <Route path="history" element={<History />} />
       </Route>

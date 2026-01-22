@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Outlet, NavLink } from 'react-router-dom';
-import { ShoppingCart, List, History, LogOut, Package, Activity, Zap, Clock, AlertCircle } from 'lucide-react';
+import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { ShoppingCart, List, History, LogOut, Activity, Zap, Clock, AlertCircle, UtensilsCrossed, CalendarDays, Package } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
@@ -41,6 +41,7 @@ function useLongPress(callback: () => void, ms = 500) {
 
 export default function Layout() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [stats, setStats] = useState<AIStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -70,8 +71,9 @@ export default function Layout() {
   const navItems = [
     { path: '/', icon: List, label: 'List' },
     { path: '/shopping', icon: ShoppingCart, label: 'Shop' },
+    { path: '/menu', icon: CalendarDays, label: 'Menu' },
+    { path: '/meals', icon: UtensilsCrossed, label: 'Meals' },
     { path: '/products', icon: Package, label: 'Products' },
-    { path: '/history', icon: History, label: 'History' },
   ];
 
   return (
@@ -92,9 +94,14 @@ export default function Layout() {
               <p className="text-xs text-muted-foreground">Welcome, {user?.name}</p>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={logout} title="Logout">
-            <LogOut className="w-5 h-5" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/history')} title="History">
+              <History className="w-5 h-5" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={logout} title="Logout">
+              <LogOut className="w-5 h-5" />
+            </Button>
+          </div>
         </div>
       </header>
 

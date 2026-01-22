@@ -11,19 +11,25 @@
     "db:setup": "npm run db:migrate && npm run db:seed"
   },
   "dependencies": {
+    "@cspell/dict-he": "^4.0.5",
     "@google/generative-ai": "^0.21.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
+    "cspell": "^9.6.0",
+    "cspell-trie-lib": "^9.6.0",
+    "dictionary-en": "^4.0.0",
+    "dictionary-fr": "^3.0.0",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
     "express-validator": "^7.0.1",
+    "grocery-app": "file:..",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
+    "nspell": "^2.1.5",
     "pg": "^8.11.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
   }
 }
-

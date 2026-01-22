@@ -18,7 +18,12 @@ const validateLogin = [
     body('password').exists()
 ];
 
-// Register - TEMPORARILY ENABLED (re-disable after users register)
+// Register - DISABLED (no new users for now)
+// router.post('/register', validateRegister, async (req, res) => {
+router.post('/register', (req, res) => {
+    return res.status(403).json({ error: 'Registration is currently closed' });
+});
+/* Original registration logic:
 router.post('/register', validateRegister, async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -54,6 +59,7 @@ router.post('/register', validateRegister, async (req, res) => {
         res.status(500).json({ error: 'Registration failed' });
     }
 });
+*/
 
 // Login
 router.post('/login', validateLogin, async (req, res) => {

@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import LoadingSpinner from '@/components/LoadingSpinner';
-import EditProductDialog from '@/components/EditProductDialog';
+import ProductDialog from '@/components/ProductDialog';
 
 type Tab = 'products' | 'categories';
 
@@ -19,9 +19,12 @@ export default function Products() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [editProductId, setEditProductId] = useState<number | null>(null);
-  const [isEditOpen, setIsEditOpen] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  
+  // Product dialog state (unified for create/edit)
+  const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [productDialogMode, setProductDialogMode] = useState<'create' | 'edit'>('create');
+  const [editProductId, setEditProductId] = useState<number | null>(null);
   
   // Category editing state
   const [editCategory, setEditCategory] = useState<Category | null>(null);
@@ -30,11 +33,6 @@ export default function Products() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryIcon, setNewCategoryIcon] = useState('📦');
   const [newCategorySortOrder, setNewCategorySortOrder] = useState('50');
-
-  // Add Product state
-  const [isAddProductOpen, setIsAddProductOpen] = useState(false);
-  const [newProductName, setNewProductName] = useState('');
-  const [newProductCategoryId, setNewProductCategoryId] = useState<string>('');
   
   const { toast } = useToast();
 
@@ -80,9 +78,16 @@ export default function Products() {
   };
 
   // Product handlers
+  const openAddProduct = () => {
+    setProductDialogMode('create');
+    setEditProductId(null);
+    setProductDialogOpen(true);
+  };
+
   const openEditProduct = (product: Product) => {
+    setProductDialogMode('edit');
     setEditProductId(product.id);
-    setIsEditOpen(true);
+    setProductDialogOpen(true);
   };
 
   const handleDeleteProduct = async (id: number) => {
@@ -93,24 +98,6 @@ export default function Products() {
       loadData();
     } catch (error) {
       toast({ title: 'Failed to delete', variant: 'destructive' });
-    }
-  };
-
-  const handleAddProduct = async () => {
-    if (!newProductName.trim() || !newProductCategoryId) return;
-    try {
-      await api.createProduct(newProductName.trim(), parseInt(newProductCategoryId));
-      toast({ title: 'Product created' });
-      setIsAddProductOpen(false);
-      setNewProductName('');
-      setNewProductCategoryId('');
-      loadData();
-    } catch (error) {
-      toast({
-        title: 'Failed to create product',
-        description: error instanceof Error ? error.message : 'Something went wrong',
-        variant: 'destructive',
-      });
     }
   };
 
@@ -253,7 +240,7 @@ export default function Products() {
       {activeTab === 'products' && (
         <>
           {/* Add Product Button */}
-          <Button onClick={() => setIsAddProductOpen(true)} className="w-full gap-2">
+          <Button onClick={openAddProduct} className="w-full gap-2">
             <Plus className="w-4 h-4" />
             Add Product
           </Button>
@@ -427,12 +414,14 @@ export default function Products() {
         </>
       )}
 
-      {/* Edit Product Dialog */}
-      <EditProductDialog
+      {/* Product Dialog (unified for create/edit) */}
+      <ProductDialog
+        mode={productDialogMode}
         productId={editProductId}
-        open={isEditOpen}
-        onOpenChange={setIsEditOpen}
-        onSaved={loadData}
+        open={productDialogOpen}
+        onOpenChange={setProductDialogOpen}
+        onSaved={() => loadData()}
+        categories={categories}
       />
 
       {/* Add Category Dialog */}
@@ -537,52 +526,6 @@ export default function Products() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Product Dialog */}
-      <Dialog open={isAddProductOpen} onOpenChange={setIsAddProductOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add Product</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="product-name">Name</Label>
-              <Input
-                id="product-name"
-                placeholder="e.g., Milk"
-                value={newProductName}
-                onChange={(e) => setNewProductName(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="product-category">Category</Label>
-              <select
-                id="product-category"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                value={newProductCategoryId}
-                onChange={(e) => setNewProductCategoryId(e.target.value)}
-              >
-                <option value="">Select a category...</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.icon} {cat.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddProductOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleAddProduct} 
-              disabled={!newProductName.trim() || !newProductCategoryId}
-            >
-              Add Product
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
