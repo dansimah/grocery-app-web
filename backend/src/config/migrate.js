@@ -110,6 +110,16 @@ CREATE TABLE IF NOT EXISTS menu_plan_items (
     UNIQUE(user_id, week_start, day_of_week, meal_type, meal_id)
 );
 
+-- Password reset tokens
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    token VARCHAR(64) UNIQUE NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    used BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Migration: Add meal_type column and update constraint
 DO $$ 
 BEGIN
@@ -150,6 +160,8 @@ CREATE INDEX IF NOT EXISTS idx_meal_items_meal ON meal_items(meal_id);
 CREATE INDEX IF NOT EXISTS idx_meal_items_product ON meal_items(product_id);
 CREATE INDEX IF NOT EXISTS idx_menu_plan_items_user ON menu_plan_items(user_id);
 CREATE INDEX IF NOT EXISTS idx_menu_plan_items_week ON menu_plan_items(week_start);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token ON password_reset_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_tokens(user_id);
 `;
 
 async function runMigrations() {

@@ -2,6 +2,8 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ResetPassword from './pages/ResetPassword';
+import AdminResetPassword from './pages/AdminResetPassword';
 import Dashboard from './pages/Dashboard';
 import Shopping from './pages/Shopping';
 import History from './pages/History';
@@ -51,6 +53,10 @@ export default function App() {
         }
       />
       <Route
+        path="/reset-password"
+        element={<ResetPassword />}
+      />
+      <Route
         path="/"
         element={
           <PrivateRoute>
@@ -64,6 +70,7 @@ export default function App() {
         <Route path="meals" element={<Meals />} />
         <Route path="products" element={<Products />} />
         <Route path="history" element={<History />} />
+        <Route path="admin/reset-password" element={<AdminResetPassword />} />
       </Route>
     </Routes>
   );

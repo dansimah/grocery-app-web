@@ -52,6 +52,21 @@ class ApiClient {
     return this.request<{ user: User }>('/auth/me');
   }
 
+  // Password Reset
+  async generateResetToken(email: string) {
+    return this.request<{ message: string; resetUrl: string; expiresAt: string; userEmail: string }>('/auth/admin/reset-token', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
+  async resetPassword(token: string, password: string) {
+    return this.request<{ message: string }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, password }),
+    });
+  }
+
   // Categories
   async getCategories() {
     return this.request<Category[]>('/products/categories');

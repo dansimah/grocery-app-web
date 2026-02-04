@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 class User {
     constructor(data = {}) {
@@ -44,6 +45,74 @@ class User {
     // Verify password
     async verifyPassword(password) {
         return bcrypt.compare(password, this.password_hash);
+    }
+
+    // Update user password
+    static async updatePassword(userId, newPassword) {
+        const password_hash = await bcrypt.hash(newPassword, 12);
+        const result = await db.query(
+            `UPDATE users SET password_hash = $1, updated_at = NOW() 
+             WHERE id = $2 RETURNING *`,
+            [password_hash, userId]
+        );
+        return result.rows[0] ? new User(result.rows[0]) : null;
+    }
+
+    // Create password reset token
+    static async createResetToken(userId) {
+        // Generate a secure random token
+        const token = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
+
+        // Invalidate any existing unused tokens for this user
+        await db.query(
+            `UPDATE password_reset_tokens SET used = TRUE 
+             WHERE user_id = $1 AND used = FALSE`,
+            [userId]
+        );
+
+        // Create new token
+        await db.query(
+            `INSERT INTO password_reset_tokens (user_id, token, expires_at) 
+             VALUES ($1, $2, $3)`,
+            [userId, token, expiresAt]
+        );
+
+        return { token, expiresAt };
+    }
+
+    // Validate reset token and return user
+    static async validateResetToken(token) {
+        const result = await db.query(
+            `SELECT prt.*, u.id as user_id, u.email, u.name 
+             FROM password_reset_tokens prt
+             JOIN users u ON prt.user_id = u.id
+             WHERE prt.token = $1 
+               AND prt.used = FALSE 
+               AND prt.expires_at > NOW()`,
+            [token]
+        );
+
+        if (!result.rows[0]) {
+            return null;
+        }
+
+        return {
+            tokenId: result.rows[0].id,
+            user: new User({
+                id: result.rows[0].user_id,
+                email: result.rows[0].email,
+                name: result.rows[0].name
+            })
+        };
+    }
+
+    // Mark reset token as used
+    static async markTokenUsed(tokenId) {
+        await db.query(
+            `UPDATE password_reset_tokens SET used = TRUE WHERE id = $1`,
+            [tokenId]
+        );
     }
 
     // Return safe user object (without password)

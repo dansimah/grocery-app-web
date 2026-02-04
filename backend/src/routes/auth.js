@@ -106,5 +106,76 @@ router.get('/me', authMiddleware, async (req, res) => {
     res.json({ user: req.user.toJSON() });
 });
 
+// Admin: Generate password reset token for a user
+router.post('/admin/reset-token', authMiddleware, [
+    body('email').isEmail().normalizeEmail()
+], async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+
+        const { email } = req.body;
+
+        // Find the user
+        const user = await User.findByEmail(email);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Create reset token
+        const { token, expiresAt } = await User.createResetToken(user.id);
+
+        // Build reset URL (frontend URL)
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
+
+        res.json({
+            message: 'Reset token generated',
+            resetUrl,
+            expiresAt: expiresAt.toISOString(),
+            userEmail: email
+        });
+    } catch (error) {
+        console.error('Generate reset token error:', error);
+        res.status(500).json({ error: 'Failed to generate reset token' });
+    }
+});
+
+// Public: Reset password using token
+const validateResetPassword = [
+    body('token').isLength({ min: 64, max: 64 }),
+    body('password').isLength({ min: 6 })
+];
+
+router.post('/reset-password', validateResetPassword, async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+
+        const { token, password } = req.body;
+
+        // Validate token
+        const tokenData = await User.validateResetToken(token);
+        if (!tokenData) {
+            return res.status(400).json({ error: 'Invalid or expired reset token' });
+        }
+
+        // Update password
+        await User.updatePassword(tokenData.user.id, password);
+
+        // Mark token as used
+        await User.markTokenUsed(tokenData.tokenId);
+
+        res.json({ message: 'Password reset successfully' });
+    } catch (error) {
+        console.error('Reset password error:', error);
+        res.status(500).json({ error: 'Failed to reset password' });
+    }
+});
+
 module.exports = router;
 

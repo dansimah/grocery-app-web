@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
-import { X, Search, Check, Plus } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { X, Search, Check, Plus, SpellCheck } from 'lucide-react';
+import { api } from '@/lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -32,6 +33,8 @@ export default function MealDialog({
   const [selectedProductIds, setSelectedProductIds] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [spellSuggestions, setSpellSuggestions] = useState<string[]>([]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Product dialog state
   const [showProductDialog, setShowProductDialog] = useState(false);
@@ -50,8 +53,55 @@ export default function MealDialog({
       setSearchQuery('');
       setShowProductDialog(false);
       setNewProductInitialName('');
+      setSpellSuggestions([]);
     }
   }, [open, meal]);
+
+  // Debounced spell check
+  const checkSpelling = useCallback(async (text: string) => {
+    if (!text || text.length < 2) {
+      setSpellSuggestions([]);
+      return;
+    }
+
+    try {
+      const result = await api.getSpellSuggestions(text);
+      if (result.available && result.combinedSuggestions.length > 0) {
+        setSpellSuggestions(result.combinedSuggestions);
+      } else {
+        setSpellSuggestions([]);
+      }
+    } catch {
+      // Silently fail - spell check is optional
+      setSpellSuggestions([]);
+    }
+  }, []);
+
+  // Trigger spell check when name changes
+  useEffect(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    if (name && name.length >= 2 && open) {
+      debounceRef.current = setTimeout(() => {
+        checkSpelling(name);
+      }, 500); // 500ms debounce
+    } else {
+      setSpellSuggestions([]);
+    }
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [name, checkSpelling, open]);
+
+  const applySuggestion = (suggestion: string) => {
+    setName(suggestion);
+    setSpellSuggestions([]);
+  };
 
   // Filter products by search query (includes aliases)
   const filteredProducts = useMemo(() => {
@@ -133,6 +183,21 @@ export default function MealDialog({
               onChange={(e) => setName(e.target.value)}
               autoFocus
             />
+            {/* Spell suggestions */}
+            {spellSuggestions.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                <SpellCheck className="w-3.5 h-3.5 text-amber-500 mt-1" />
+                {spellSuggestions.map((suggestion, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => applySuggestion(suggestion)}
+                    className="px-2 py-0.5 text-sm bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 rounded border border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900 transition-colors"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Selected Products */}

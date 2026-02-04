@@ -83,9 +83,10 @@ app.get('/health', async (req, res) => {
 });
 
 // Routes with specific rate limits
-// Only apply auth rate limiter to login/register, not to /me
+// Only apply auth rate limiter to login/register/reset, not to /me
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
+app.use('/api/auth/reset-password', authLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/groceries', groceriesRoutes);
 app.use('/api/history', historyRoutes);
