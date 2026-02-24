@@ -1,7 +1,7 @@
 {
   "name": "Grocery List",
   "short_name": "Grocery",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Smart grocery list with AI categorization",
   "start_url": "/",
   "display": "standalone",

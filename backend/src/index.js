@@ -1,5 +1,6 @@
 require('dotenv').config();
 
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -94,10 +95,21 @@ app.use('/api/products', productsRoutes);
 app.use('/api/meals', mealsRoutes);
 app.use('/api/menu', menuRoutes);
 
-// 404 handler
-app.use((req, res) => {
-    res.status(404).json({ error: 'Not found' });
-});
+// Serve frontend static files in production
+if (process.env.NODE_ENV === 'production') {
+    const frontendDist = path.join(__dirname, '../../frontend/dist');
+    app.use(express.static(frontendDist, {
+        maxAge: '1y',
+        immutable: true,
+    }));
+    app.get('*', (req, res) => {
+        res.sendFile(path.join(frontendDist, 'index.html'));
+    });
+} else {
+    app.use((req, res) => {
+        res.status(404).json({ error: 'Not found' });
+    });
+}
 
 // Centralized error handling middleware
 app.use((err, req, res, next) => {
